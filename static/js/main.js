@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewContainer = document.getElementById('previewContainer');
     const fileName = document.getElementById('fileName');
     const fileStatus = document.getElementById('fileStatus');
+    const promptTemplate = document.getElementById('promptTemplate');
     const progressBar = document.getElementById('progressBar');
     const progressContainer = document.getElementById('progressContainer');
     const convertBtn = document.getElementById('convertBtn');
@@ -21,6 +22,68 @@ document.addEventListener('DOMContentLoaded', () => {
     const pdfPreviewError = document.getElementById('pdfPreviewError');
     const pdfDownloadLink = document.getElementById('pdfDownloadLink');
     const markdownPreview = document.getElementById('markdownPreview');
+    const promptCustomSection = document.getElementById('promptCustomSection');
+    const customPrompt = document.getElementById('customPrompt');
+    const promptPreviewContent = document.getElementById('promptPreviewContent');
+    const togglePromptPreview = document.getElementById('togglePromptPreview');
+
+    // Prompt 模板定義（與後端同步）
+    const PROMPT_TEMPLATES = {
+        "slide": `# 角色
+
+你是一個高度精確的資料結構化引擎。你的唯一任務是分析一張簡報投影片的圖片，並將其中所有具備資訊價值的內容，轉換為一個乾淨、結構化的 Markdown 文字檔案。
+
+# 最終目標
+
+產出的文字將直接作為「檢索增強生成 (RAG)」系統的知識庫。因此，輸出的品質標準是最大化「事實密度」與最小化「描述性噪音」。關於純粹美學設計、裝飾性元素的描述，都會降低知識庫的檢索效率，應予以排除。
+
+# 指導原則 (務必遵守)
+
+1.  **資訊優先，設計其次**：你的焦點是文字、數據、表格、以及明確的邏輯關係（如流程圖）。投影片的背景、顏色、裝飾圖形、或版面風格不屬於資訊範疇。
+2.  **區分「資訊圖」與「裝飾圖」**：
+    * **資訊圖 (需要分析)**：指傳達具體數據或流程的圖，例如：數據圖表、架構圖、流程圖、軟體介面截圖。
+    * **裝飾圖 (需要忽略)**：指僅為美化或營造氛圍的圖，例如：無關的庫存照片 (如會議、握手、城市風景)、通用小圖示 (如燈泡、齒輪)、抽象的幾何形狀。
+
+# 指令
+
+請分析提供的投影片圖片，並嚴格按照以下指令，將所有分析結果整合成一份結構化的 Markdown 文件：
+
+1.  **主要標題擷取**: 識別投影片的主要標題，並將其格式化為 H1 標題 (\`#\`)。
+2.  **內文與列表擷取**: 按照邏輯閱讀順序，精確擷取所有文字內容。必須保留原始的項目符號 (\`- \`) 或數字列表 (\`1. \`) 格式。
+3.  **表格資料提取**: 若有表格，將其完整轉換為 Markdown 表格格式。確保所有欄位和儲存格資料都被精確轉錄。
+4.  **流程/架構圖轉譯 (資訊圖分析)**:
+    * 若有流程圖、架構圖或任何使用箭頭/方塊表達邏輯關係的圖表：
+    * 嚴禁描述形狀或顏色，例如「一個藍色方塊指向一個綠色圓形」。
+    * 必須以文字清晰地說明整個流程的步驟、組件的關係、或數據的流向。
+    * 例如，將 \`[A: 輸入資料]\` -> \`[B: 驗證資料]\` 轉譯為：「流程開始於『A: 輸入資料』，接著進入下一步『B: 驗證資料』。」
+5.  **圖像內容處理 (區分對待)**:
+    * 對於「資訊圖」(如軟體截圖、數據圖表)：簡潔地描述其核心內容及功能。例如：「此為軟體的使用者設定介面截圖，顯示了『通知』、『外觀』和『語言』三個可調整的選項。」
+    * 對於「裝飾圖」(如庫存照片、通用圖示)：完全忽略，不要在輸出中描述或提及這些圖片。
+
+# 排除項目
+* 禁止描述任何純粹的背景設計元素（如抽象形狀、漸層、線條）。
+* 禁止對裝飾性圖片或通用圖示進行任何形式的描述或象徵意義分析。
+* 禁止使用任何主觀或形容詞類的詞彙來評論投影片的設計風格（例如「現代感」、「專業」、「簡潔」）。
+
+# 輸出格式
+
+請務必使用「繁體中文」，並以單一、連貫的 Markdown 格式提供所有分析後的內容。`,
+        "table": `# 任務
+你是表格結構化專家。請從圖片中萃取所有表格，轉為 Markdown 表格；若有純文字也需保留原始段落與列表格式。
+
+# 輸出要求
+- 保留所有欄位、列順序與數值。
+- 若有合併儲存格，重複填寫內容以保持矩陣完整。
+- 沒有表格時，輸出一般文字（保留列表格式）。
+- 僅使用繁體中文。`,
+        "ocr": `# 任務
+進行純 OCR 轉寫，盡量還原原文內容與換行，保持 Markdown 簡單段落與列表。
+
+# 輸出要求
+- 不要加入主觀描述。
+- 列表使用原始的項目符號或數字。
+- 僅使用繁體中文。`
+    };
 
     // 驗證關鍵元素是否存在
     const requiredElements = {
@@ -46,6 +109,82 @@ document.addEventListener('DOMContentLoaded', () => {
     let downloadUrl = null;
     let pdfPreviewUrl = null;
     let markdownContent = null;
+    let promptPreviewExpanded = true;
+
+    // Prompt 預覽相關函數
+    function updatePromptPreview() {
+        if (!promptPreviewContent) return;
+
+        const selectedValue = promptTemplate ? promptTemplate.value : 'slide';
+        let promptText = '';
+
+        if (selectedValue === 'custom') {
+            promptText = customPrompt ? customPrompt.value.trim() : '';
+            if (!promptText) {
+                promptText = '請在下方輸入您的自訂 prompt';
+            }
+        } else {
+            promptText = PROMPT_TEMPLATES[selectedValue] || PROMPT_TEMPLATES['slide'];
+        }
+
+        // 顯示 prompt 內容（使用 <pre> 保持格式）
+        promptPreviewContent.innerHTML = `<pre class="prompt-text">${escapeHtml(promptText)}</pre>`;
+    }
+
+    function togglePromptPreviewDisplay() {
+        if (!promptPreviewContent) return;
+        promptPreviewExpanded = !promptPreviewExpanded;
+        if (promptPreviewExpanded) {
+            promptPreviewContent.style.display = 'block';
+            if (togglePromptPreview) {
+                togglePromptPreview.textContent = '▼';
+                togglePromptPreview.title = '收起';
+            }
+        } else {
+            promptPreviewContent.style.display = 'none';
+            if (togglePromptPreview) {
+                togglePromptPreview.textContent = '▶';
+                togglePromptPreview.title = '展開';
+            }
+        }
+    }
+
+    // 監聽 prompt 模板選擇變化
+    if (promptTemplate) {
+        promptTemplate.addEventListener('change', () => {
+            const selectedValue = promptTemplate.value;
+            if (selectedValue === 'custom') {
+                if (promptCustomSection) {
+                    promptCustomSection.style.display = 'block';
+                }
+                if (customPrompt) {
+                    customPrompt.focus();
+                }
+            } else {
+                if (promptCustomSection) {
+                    promptCustomSection.style.display = 'none';
+                }
+            }
+            updatePromptPreview();
+        });
+    }
+
+    // 監聽自訂 prompt 輸入變化
+    if (customPrompt) {
+        customPrompt.addEventListener('input', () => {
+            if (promptTemplate && promptTemplate.value === 'custom') {
+                updatePromptPreview();
+            }
+        });
+    }
+
+    // 監聽 prompt 預覽展開/收起按鈕
+    if (togglePromptPreview) {
+        togglePromptPreview.addEventListener('click', togglePromptPreviewDisplay);
+    }
+
+    // 初始化 prompt 預覽
+    updatePromptPreview();
 
     // Drag and drop handlers
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -176,6 +315,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (downloadBtn) downloadBtn.style.display = 'none';
             if (resetBtn) resetBtn.style.display = 'inline-block';
             if (errorMessage) errorMessage.style.display = 'none';
+            
+            // 更新 prompt 預覽
+            updatePromptPreview();
             
         } catch (error) {
             console.error('顯示預覽區域時發生錯誤:', error);
@@ -336,6 +478,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pdfPreviewError) pdfPreviewError.style.display = 'none';
         markdownPreview.innerHTML = '';
         markdownContent = null;
+        
+        // 重置 prompt 相關
+        if (promptTemplate) {
+            promptTemplate.value = 'slide';
+        }
+        if (promptCustomSection) {
+            promptCustomSection.style.display = 'none';
+        }
+        if (customPrompt) {
+            customPrompt.value = '';
+        }
+        updatePromptPreview();
+        promptPreviewExpanded = true;
+        if (promptPreviewContent) {
+            promptPreviewContent.style.display = 'block';
+        }
+        if (togglePromptPreview) {
+            togglePromptPreview.textContent = '▼';
+            togglePromptPreview.title = '收起';
+        }
+        
         const previewHeader = document.querySelector('.preview-header');
         if (previewHeader) {
             previewHeader.style.display = 'none';
@@ -375,6 +538,17 @@ document.addEventListener('DOMContentLoaded', () => {
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return;
 
+        // 驗證自訂 prompt
+        if (promptTemplate && promptTemplate.value === 'custom') {
+            if (!customPrompt || !customPrompt.value.trim()) {
+                showError('請輸入自訂 prompt 內容');
+                if (customPrompt) {
+                    customPrompt.focus();
+                }
+                return;
+            }
+        }
+
         convertBtn.disabled = true;
         convertBtn.textContent = '轉換中...';
         fileStatus.textContent = '正在轉換 PDF...';
@@ -397,6 +571,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const formData = new FormData();
         formData.append('file', currentFile);
+        
+        // 處理 prompt_template：如果是自訂選項，傳送自訂文字；否則傳送模板 ID
+        if (promptTemplate && promptTemplate.value) {
+            if (promptTemplate.value === 'custom' && customPrompt && customPrompt.value.trim()) {
+                // 自訂 prompt：傳送自訂文字
+                formData.append('prompt_template', customPrompt.value.trim());
+            } else if (promptTemplate.value !== 'custom') {
+                // 模板選項：傳送模板 ID
+                formData.append('prompt_template', promptTemplate.value);
+            }
+        }
 
         try {
             const response = await fetch('/api/v1/convert-pdf', {

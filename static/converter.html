@@ -39,11 +39,31 @@
                         <span class="file-name" id="fileName">filename.pdf</span>
                         <span class="file-status" id="fileStatus">準備就緒</span>
                     </div>
+                    <div class="prompt-selector">
+                        <label for="promptTemplate" style="font-size: 14px; color: #4b5563; margin-right: 8px;">提示樣板</label>
+                        <select id="promptTemplate" class="input-select">
+                            <option value="slide" selected>簡報/一般</option>
+                            <option value="table">表格強化</option>
+                            <option value="ocr">純 OCR</option>
+                            <option value="custom">自訂</option>
+                        </select>
+                    </div>
                     <div class="action-buttons">
                         <button id="convertBtn" class="btn primary-btn" style="display: inline-block;">開始轉換</button>
                         <button id="downloadBtn" class="btn success-btn" style="display: none;">下載 Markdown</button>
                         <button id="resetBtn" class="btn secondary-btn" style="display: inline-block;">重新選擇</button>
                     </div>
+                </div>
+                <div class="prompt-custom-section" id="promptCustomSection" style="display: none;">
+                    <label for="customPrompt" style="font-size: 14px; color: #4b5563; margin-bottom: 8px; display: block;">自訂 Prompt</label>
+                    <textarea id="customPrompt" class="custom-prompt-input" placeholder="請輸入您的自訂 prompt..."></textarea>
+                </div>
+                <div class="prompt-preview-section">
+                    <div class="prompt-preview-header">
+                        <h4>Prompt 預覽</h4>
+                        <button id="togglePromptPreview" class="btn-icon" title="展開/收起">▼</button>
+                    </div>
+                    <div class="prompt-preview-content" id="promptPreviewContent"></div>
                 </div>
                 <div class="progress-bar-container" id="progressContainer" style="display: none;">
                     <div class="progress-bar" id="progressBar"></div>
