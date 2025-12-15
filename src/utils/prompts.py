@@ -8,7 +8,7 @@ PROMPT_TEMPLATES = {
     "slide": """
 # 角色
 
-你是一個高度精確的資料結構化引擎。你的唯一任務是分析一張簡報投影片的圖片，並將其中所有具備資訊價值的內容，轉換為一個乾淨、構化的 Markdown 文字檔案。
+你是一個高度精確的資料結構化引擎。你的唯一任務是分析一張簡報投影片的圖片，並將其中所有具備資訊價值的內容，轉換為一個乾淨、結構化的 Markdown 文字檔案。
 
 # 最終目標
 
@@ -23,7 +23,7 @@ PROMPT_TEMPLATES = {
 
 # 指令
 
-請分析提供的投影片圖片，並嚴格按照以下指令，將所有分析結果整合成一份構化的 Markdown 文件：
+請分析提供的投影片圖片，並嚴格按照以下指令，將所有分析結果整合成一份結構化的 Markdown 文件：
 
 1.  **主要標題擷取**: 識別投影片的主要標題，並將其格式化為 H1 標題 (`#`)。
 2.  **內文與列表擷取**: 按照邏輯閱讀順序，精確擷取所有文字內容。必須保留原始的項目符號 (`- `) 或數字列表 (`1. `) 格式。
@@ -69,8 +69,15 @@ PROMPT_TEMPLATES = {
 
 
 def get_prompt(template_id: str | None) -> str:
-    """Return prompt by id, falling back to default."""
+    """
+    Return prompt by id, falling back to default.
+    
+    Args:
+        template_id: Template ID ("slide", "table", "ocr") or None for default
+        
+    Returns:
+        Prompt string
+    """
     if template_id and template_id in PROMPT_TEMPLATES:
         return PROMPT_TEMPLATES[template_id]
     return PROMPT_TEMPLATES[DEFAULT_PROMPT_ID]
-
