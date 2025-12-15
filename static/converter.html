@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' blob:; object-src 'self' blob:; frame-src 'self' blob:;">
+    <title>PDF 轉 Markdown 轉換器</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PDF 轉 Markdown</h1>
+            <p>上傳您的 PDF 文件，我們將其轉換為結構化的 Markdown 格式。</p>
+        </header>
+
+        <main>
+            <!-- 上傳區域 -->
+            <div class="upload-area" id="uploadArea">
+                <div class="icon-container">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                </div>
+                <h3>拖放 PDF 檔案至此，或點擊上傳</h3>
+                <p class="support-text">支援 PDF 格式</p>
+                <input type="file" id="fileInput" accept=".pdf" hidden>
+                <div id="uploadErrorMessage" class="error-message" style="display: none; margin-top: 15px;"></div>
+            </div>
+
+            <!-- 預覽和轉換區域 -->
+            <div class="preview-conversion-area" id="previewConversionArea" style="display: none;">
+                <div class="file-controls">
+                    <div class="file-info">
+                        <span class="file-name" id="fileName">filename.pdf</span>
+                        <span class="file-status" id="fileStatus">準備就緒</span>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="convertBtn" class="btn primary-btn" style="display: inline-block;">開始轉換</button>
+                        <button id="downloadBtn" class="btn success-btn" style="display: none;">下載 Markdown</button>
+                        <button id="resetBtn" class="btn secondary-btn" style="display: inline-block;">重新選擇</button>
+                    </div>
+                </div>
+                <div class="progress-bar-container" id="progressContainer" style="display: none;">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div id="errorMessage" class="error-message" style="display: none;"></div>
+            </div>
+
+            <!-- 左右分欄預覽區域 -->
+            <div class="preview-container" id="previewContainer" style="display: none;">
+                <div class="preview-header">
+                    <h2>轉換完成</h2>
+                    <div class="preview-actions">
+                        <button id="downloadBtnPreview" class="btn success-btn">下載 Markdown</button>
+                        <button id="resetBtnPreview" class="btn secondary-btn">轉換其他檔案</button>
+                    </div>
+                </div>
+                <div class="preview-split">
+                    <div class="preview-panel pdf-panel">
+                        <div class="panel-header">
+                            <h3>PDF 預覽</h3>
+                        </div>
+                        <div class="panel-content pdf-preview-container">
+                            <embed id="pdfPreviewEmbed" src="" type="application/pdf" style="display: none;">
+                            <object id="pdfPreview" data="" type="application/pdf" style="display: none;">
+                                <iframe id="pdfPreviewFallback" src="" scrolling="no" style="display: none; border: none;"></iframe>
+                                <div id="pdfPreviewError" style="padding: 40px; text-align: center; color: #6b7280; display: none;">
+                                    <p style="margin-bottom: 15px;">您的瀏覽器不支援 PDF 預覽。</p>
+                                    <a id="pdfDownloadLink" href="" download style="color: #3b82f6; text-decoration: underline; font-weight: 500;">點擊下載 PDF</a>
+                                </div>
+                            </object>
+                        </div>
+                    </div>
+                    <div class="preview-panel markdown-panel">
+                        <div class="panel-header">
+                            <h3>Markdown 預覽</h3>
+                        </div>
+                        <div class="panel-content">
+                            <div id="markdownPreview" class="markdown-content"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by Agentic RAG System</p>
+        </footer>
+    </div>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

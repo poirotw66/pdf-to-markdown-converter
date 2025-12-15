@@ -1,0 +1,586 @@
+:root {
+    --primary-color: #3b82f6;
+    --primary-hover: #2563eb;
+    --success-color: #10b981;
+    --success-hover: #059669;
+    --bg-color: #f3f4f6;
+    --card-bg: #ffffff;
+    --text-main: #1f2937;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+    --error-color: #ef4444;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+.container {
+    background: var(--card-bg);
+    width: 100%;
+    min-height: 100vh;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.3s ease;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+header {
+    margin-bottom: 30px;
+    padding: 0 10px;
+}
+
+@media (min-width: 768px) {
+    header {
+        margin-bottom: 40px;
+    }
+}
+
+h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+p {
+    color: var(--text-secondary);
+}
+
+.upload-area {
+    border: 2px dashed var(--border-color);
+    border-radius: 12px;
+    padding: 40px 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #fafafa;
+}
+
+.upload-area:hover, .upload-area.dragover {
+    border-color: var(--primary-color);
+    background: #eff6ff;
+    transform: translateY(-2px);
+}
+
+.icon-container {
+    width: 64px;
+    height: 64px;
+    background: #eff6ff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    color: var(--primary-color);
+}
+
+.icon-container svg {
+    width: 32px;
+    height: 32px;
+}
+
+.upload-area h3 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+    color: var(--text-main);
+}
+
+.support-text {
+    font-size: 0.9rem;
+}
+
+.preview-conversion-area {
+    margin-top: 30px;
+    text-align: left;
+    background: #f9fafb;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.file-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.file-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.file-name {
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+}
+
+.file-status {
+    color: var(--primary-color);
+}
+
+.progress-bar-container {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), #8b5cf6);
+    width: 0%;
+    transition: width 0.4s ease;
+    border-radius: 3px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.primary-btn {
+    background: var(--primary-color);
+    color: white;
+}
+
+.primary-btn:hover {
+    background: var(--primary-hover);
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);
+}
+
+.success-btn {
+    background: var(--success-color);
+    color: white;
+}
+
+.success-btn:hover {
+    background: var(--success-hover);
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5);
+}
+
+.secondary-btn {
+    background: white;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+}
+
+.secondary-btn:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+.error-message {
+    color: var(--error-color);
+    font-size: 0.9rem;
+    margin-top: 10px;
+    background: #fef2f2;
+    padding: 10px;
+    border-radius: 6px;
+    border-left: 3px solid var(--error-color);
+}
+
+footer {
+    margin-top: 40px;
+    font-size: 0.8rem;
+    color: #9ca3af;
+}
+
+/* Loading animation */
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+.processing .progress-bar {
+    animation: pulse 1.5s infinite;
+}
+
+/* 預覽容器 */
+.preview-container {
+    margin-top: 30px;
+    text-align: left;
+    width: 100%;
+}
+
+.preview-header {
+    display: none; /* 初始隱藏，轉換完成後顯示 */
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.preview-header h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.preview-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.preview-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    height: calc(100vh - 250px);
+    min-height: 600px;
+}
+
+@media (max-width: 1024px) {
+    .preview-split {
+        gap: 10px;
+        height: calc(100vh - 220px);
+        min-height: 500px;
+    }
+}
+
+.preview-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    /* 確保面板填滿可用空間 */
+    height: 100%;
+    min-height: 0;
+}
+
+.panel-header {
+    padding: 15px 20px;
+    background: #f9fafb;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.panel-content {
+    flex: 1;
+    overflow: auto;
+    padding: 0;
+    position: relative;
+    /* 確保只有一個滾動條 - 只允許垂直滾動 */
+    overflow-x: hidden;
+    overflow-y: auto;
+    /* 填滿整個面板區域 */
+    height: 100%;
+    min-height: 0;
+}
+
+/* PDF 預覽容器 - 只讓 panel-content 處理滾動 */
+.panel-content.pdf-preview-container {
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* 確保只有一個滾動條 */
+    -webkit-overflow-scrolling: touch;
+    /* 填滿整個面板區域 */
+    height: 100%;
+}
+
+/* PDF 預覽元素 - 填滿整個區域 */
+#pdfPreview,
+#pdfPreviewEmbed,
+#pdfPreviewFallback {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #f3f4f6;
+    display: block;
+    /* 移除所有內部滾動條 */
+    overflow: hidden !important;
+    /* 確保內容完整顯示，不產生內部滾動 */
+    object-fit: contain;
+    /* 填滿整個容器 */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* 針對 iframe 的特殊處理 */
+#pdfPreviewFallback {
+    overflow: hidden !important;
+    /* 移除 iframe 的滾動條 */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    /* 填滿整個區域 */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* 針對 embed 的特殊處理 */
+#pdfPreviewEmbed {
+    overflow: hidden !important;
+    /* 移除 embed 的滾動條 */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    /* 填滿整個區域 */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* 針對 object 的特殊處理 */
+#pdfPreview {
+    overflow: hidden !important;
+    /* 移除 object 的滾動條 */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    /* 填滿整個區域 */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.markdown-content {
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-main);
+    background: var(--card-bg);
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.markdown-content h1 {
+    font-size: 2em;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.3em;
+}
+
+.markdown-content h2 {
+    font-size: 1.5em;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.3em;
+}
+
+.markdown-content h3 {
+    font-size: 1.25em;
+}
+
+.markdown-content p {
+    margin-bottom: 1em;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    margin-bottom: 1em;
+    padding-left: 2em;
+}
+
+.markdown-content li {
+    margin-bottom: 0.5em;
+}
+
+.markdown-content code {
+    background: #f3f4f6;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.markdown-content pre {
+    background: #1f2937;
+    color: #f9fafb;
+    padding: 1em;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 1em;
+}
+
+.markdown-content pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+}
+
+.markdown-content blockquote {
+    border-left: 4px solid var(--primary-color);
+    padding-left: 1em;
+    margin-left: 0;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.markdown-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1em;
+}
+
+.markdown-content table th,
+.markdown-content table td {
+    border: 1px solid var(--border-color);
+    padding: 0.5em;
+    text-align: left;
+}
+
+.markdown-content table th {
+    background: #f9fafb;
+    font-weight: 600;
+}
+
+.markdown-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 1em 0;
+}
+
+.markdown-content hr {
+    border: none;
+    border-top: 2px solid var(--border-color);
+    margin: 2em 0;
+}
+
+/* 響應式設計 */
+@media (max-width: 1024px) {
+    .preview-split {
+        grid-template-columns: 1fr;
+        height: auto;
+        min-height: 500px;
+    }
+    
+    .preview-panel {
+        min-height: 500px;
+    }
+    
+    .container {
+        padding: 15px;
+    }
+    
+    header {
+        margin-bottom: 20px;
+    }
+    
+    h1 {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .preview-split {
+        gap: 10px;
+        min-height: 400px;
+    }
+    
+    .preview-panel {
+        min-height: 400px;
+    }
+    
+    .panel-header {
+        padding: 10px 15px;
+    }
+    
+    .file-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .action-buttons .btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .file-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .action-buttons,
+    .preview-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .action-buttons .btn,
+    .preview-actions .btn {
+        width: 100%;
+    }
+    
+    .preview-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+}
