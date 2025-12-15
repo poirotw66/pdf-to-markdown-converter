@@ -2,14 +2,60 @@
 
 將 PDF 文件轉換為結構化的 Markdown 格式，內建前端介面與後端 API。
 
+## 📌 關於文件結構化
+
+在文件處理流程中，我們將 PDF、Word、PPT、圖片與其他非結構化文件轉換為 **Markdown** 格式，以便後續進行 AI 解析、RAG 構建與內容分析。此步驟並非傳統的「資料清洗」，而是 **將非結構化內容標準化、格式化、可解析化** 的前置工程。
+
+**文件結構化的核心，是將非結構化文件轉換為 LLM 最能理解、最能高效解析的格式──Markdown。**
+
+## 📘 為什麼選擇 Markdown？
+
+根據 MarkItDown 的設計理念，Markdown 之所以被選為核心輸出格式，是因為：
+
+### **1. Markdown 接近純文字，但能保留重要結構**
+
+* 具備標題、段落、清單、表格、連結等輕量結構表示法
+* 適合表示文件的重要資訊，而不會像 HTML/PDF 那麼冗長
+* 在 token 成本與解析便利性之間達到最佳平衡
+
+### **2. LLM 天生對 Markdown 非常熟悉**
+
+> 主流 LLM（如 GPT、Gemini）「原生理解 Markdown」，並且常在回答時自動使用 Markdown。  
+> 代表模型在訓練過程中大量接觸 Markdown，能自然解析其結構與語意。
+
+因此 Markdown 是目前最適合作為 **文件 → LLM 的中間層格式**。
+
+### **3. Markdown 對 LLM 來說極度 token-efficient**
+
+比 PDF/XML/HTML 少非常多的無用標記，因此：
+
+* token 花費大幅降低
+* 模型上下文更乾淨
+* 對 RAG、摘要、QA 解析的效果更好
+
+### **4. Markdown 是結構化但不複雜的格式**
+
+文件經過 Markdown 化後：
+
+* 標題層級井然有序
+* 表格可由模型準確閱讀
+* 段落、清單等語意清晰
+* 不需要繁重的 parser 就能被 AI 使用
+
+有助於 RAG pipeline、embedding、index 建立更準確。
+
 ## 功能特點
-- 📄 PDF 上傳與轉換
+
+- 📄 PDF 上傳與轉換（支援多種提示樣板）
 - 👁️ 即時 PDF 預覽
 - 📝 Markdown 預覽渲染
 - 🔄 左右分欄對比
 - 💾 一鍵下載轉換結果
+- 🎨 可自訂 Prompt 樣板
+- ⚡ 混合解析策略（PyMuPDF 快速路徑 + Gemini Vision）
 
 ## 專案結構
+
 ```
 pdf-to-markdown-converter/
 ├── app/
@@ -17,11 +63,23 @@ pdf-to-markdown-converter/
 │   ├── config.py            # 配置（.env）
 │   └── api/
 │       └── pdf_convert.py   # PDF 轉換 API
-├── src/utils/               # 工具模組 (parser/exporter/cache/logging/retry)
-├── static/                  # 前端介面 (converter.html + css/js)
-├── requirements.txt
+├── src/utils/               # 工具模組
+│   ├── pdf_parser.py        # PDF 解析器（混合策略）
+│   ├── pdf_cache.py          # PDF 快取機制
+│   ├── md_exporter.py        # Markdown 匯出器
+│   ├── prompts.py            # Prompt 樣板管理
+│   ├── logging_config.py     # 日誌配置
+│   └── retry.py              # 重試機制
+├── static/                   # 前端介面
+│   ├── converter.html        # 主頁面
+│   ├── css/
+│   │   └── style.css         # 樣式表
+│   └── js/
+│       └── main.js           # 前端邏輯
+├── requirements.txt          # Python 依賴
 ├── ENV_EXAMPLE.md           # 環境變數範例
-└── README.md
+├── 文件結構化.md            # 文件結構化說明文件
+└── README.md                # 本文件
 ```
 
 ## 安裝
@@ -40,27 +98,110 @@ sudo apt-get install poppler-utils
 ```
 
 ## 環境變數
+
 請依 `ENV_EXAMPLE.md` 建立 `.env`，至少需設定：
-```
+
+```env
 GOOGLE_API_KEY=your-google-api-key
 GEMINI_MODEL=gemini-2.5-pro
 ```
 
+### 可選配置
+
+```env
+# PDF 處理配置
+PDF_TEXT_DENSITY_THRESHOLD=0.02  # 文字密度閾值（低於此值使用 Gemini Vision）
+PDF_MAX_WORKERS=4                # 最大工作線程數
+PDF_MAX_PROCESSES=2               # 最大進程數
+PDF_FORCE_PYMUPDF=false           # 強制僅使用 PyMuPDF
+
+# 快取配置
+PDF_CACHE_ENABLED=true            # 啟用快取
+PDF_CACHE_DIR=./data/pdf_cache    # 快取目錄
+
+# 日誌配置
+LOG_LEVEL=INFO                    # 日誌級別
+LOG_FILE=                         # 日誌文件（空則輸出到控制台）
+JSON_LOGS=false                   # JSON 格式日誌
+STRUCTURED_LOGGING=true           # 結構化日誌
+
+# 伺服器配置
+API_HOST=0.0.0.0                 # API 主機
+API_PORT=8000                     # API 端口
+```
+
 ## 啟動
+
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 # 或
 python -m app.main
 ```
-前端介面：http://localhost:8000/  
-轉換 API：POST http://localhost:8000/api/v1/convert-pdf (multipart/form-data, file=PDF)
 
-## 主要依賴
-- FastAPI, Uvicorn
-- PyMuPDF, pdf2image, Pillow
-- google-generativeai (Gemini Vision)
-- loguru, pydantic-settings
+### 訪問地址
+
+* **前端介面**：http://localhost:8000/
+* **健康檢查**：http://localhost:8000/health
+* **轉換 API**：POST http://localhost:8000/api/v1/convert-pdf
+
+### API 使用範例
+
+```bash
+# 使用預設樣板
+curl -X POST "http://localhost:8000/api/v1/convert-pdf" \
+  -F "file=@document.pdf" \
+  -F "prompt_template=slide"
+
+# 使用自訂 prompt
+curl -X POST "http://localhost:8000/api/v1/convert-pdf" \
+  -F "file=@document.pdf" \
+  -F "prompt_template=你的自訂 prompt 內容"
+```
+
+### Prompt 樣板選項
+
+* `slide` - 簡報/一般（預設）
+* `table` - 表格強化
+* `ocr` - 純 OCR
+* 自訂文字 - 直接輸入自訂 prompt
+
+## 技術架構
+
+### 解析策略
+
+本專案採用**混合解析策略**，結合兩種方法的優勢：
+
+1. **PyMuPDF 快速路徑**：對於文字密度高的頁面，直接提取文字，速度快、成本低
+2. **Gemini Vision**：對於文字密度低或包含圖表的頁面，使用 AI 視覺模型進行結構化提取
+
+系統會自動判斷每頁的文字密度，智能選擇最適合的解析方法。
+
+### 主要依賴
+
+* **Web 框架**：FastAPI, Uvicorn
+* **PDF 處理**：PyMuPDF (fitz), pdf2image, Pillow
+* **AI 模型**：google-generativeai (Gemini Vision)
+* **配置管理**：pydantic-settings, python-dotenv
+* **日誌系統**：loguru
+* **前端**：原生 HTML/CSS/JavaScript (Marked.js for Markdown rendering)
+
+### 核心功能
+
+* ✅ 智能文字密度檢測
+* ✅ 自動快取機制（支援斷點續傳）
+* ✅ 重試機制與斷路器
+* ✅ 多進程圖片轉換 + 多線程 API 調用
+* ✅ 速率限制保護
+* ✅ 結構化日誌記錄
+
+## 使用場景
+
+* **RAG 系統**：將 PDF 文件轉換為 Markdown 後進行 embedding 和檢索
+* **AI 分析**：為 LLM 提供結構化的文件內容
+* **文件處理**：批量處理 PDF 文件，提取結構化內容
+* **知識庫構建**：將非結構化文件轉換為可索引的 Markdown 格式
 
 ## 授權
+
 依原專案授權。
 

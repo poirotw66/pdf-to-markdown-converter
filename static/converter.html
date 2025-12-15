@@ -15,10 +15,47 @@
     <div class="container">
         <header>
             <h1>PDF 轉 Markdown</h1>
-            <p>上傳您的 PDF 文件，我們將其轉換為結構化的 Markdown 格式。</p>
+            <p>上傳您的 PDF 文件，我們將其轉換為結構化的 Markdown 格式</p>
         </header>
 
         <main>
+            <!-- 為什麼選擇 Markdown 說明 -->
+            <div class="info-section">
+                <div class="info-card">
+                    <h3>為什麼選擇 Markdown？</h3>
+                    <div class="info-content">
+                        <div class="info-item">
+                            <div class="info-icon">📘</div>
+                            <div class="info-text">
+                                <strong>接近純文字，但能保留重要結構</strong>
+                                <p>具備標題、段落、清單、表格、連結等輕量結構表示法，適合表示文件的重要資訊，在 token 成本與解析便利性之間達到最佳平衡。</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-icon">🤖</div>
+                            <div class="info-text">
+                                <strong>LLM 天生對 Markdown 非常熟悉</strong>
+                                <p>主流 LLM（如 GPT、Gemini）原生理解 Markdown，並且常在回答時自動使用 Markdown。代表模型在訓練過程中大量接觸 Markdown，能自然解析其結構與語意。</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-icon">⚡</div>
+                            <div class="info-text">
+                                <strong>對 LLM 來說極度 token-efficient</strong>
+                                <p>比 PDF/XML/HTML 少非常多的無用標記，token 花費大幅降低，模型上下文更乾淨，對 RAG、摘要、QA 解析的效果更好。</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-icon">📋</div>
+                            <div class="info-text">
+                                <strong>結構化但不複雜的格式</strong>
+                                <p>標題層級井然有序，表格可由模型準確閱讀，段落、清單等語意清晰，不需要繁重的 parser 就能被 AI 使用，有助於 RAG pipeline、embedding、index 建立更準確。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 上傳區域 -->
             <div class="upload-area" id="uploadArea">
                 <div class="icon-container">
@@ -40,7 +77,7 @@
                         <span class="file-status" id="fileStatus">準備就緒</span>
                     </div>
                     <div class="prompt-selector">
-                        <label for="promptTemplate" style="font-size: 14px; color: #4b5563; margin-right: 8px;">提示樣板</label>
+                        <label for="promptTemplate" class="prompt-label">提示樣板</label>
                         <select id="promptTemplate" class="input-select">
                             <option value="slide" selected>簡報/一般</option>
                             <option value="table">表格強化</option>
@@ -55,7 +92,7 @@
                     </div>
                 </div>
                 <div class="prompt-custom-section" id="promptCustomSection" style="display: none;">
-                    <label for="customPrompt" style="font-size: 14px; color: #4b5563; margin-bottom: 8px; display: block;">自訂 Prompt</label>
+                    <label for="customPrompt" class="prompt-label">自訂 Prompt</label>
                     <textarea id="customPrompt" class="custom-prompt-input" placeholder="請輸入您的自訂 prompt..."></textarea>
                 </div>
                 <div class="prompt-preview-section">
