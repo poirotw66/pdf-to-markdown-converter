@@ -201,6 +201,68 @@ curl -X POST "http://localhost:8000/api/v1/convert-pdf" \
 * **文件處理**：批量處理 PDF 文件，提取結構化內容
 * **知識庫構建**：將非結構化文件轉換為可索引的 Markdown 格式
 
+## 部署到 Render
+
+本專案可以輕鬆部署到 [Render](https://render.com) 平台。
+
+### 部署步驟
+
+1. **準備 GitHub 倉庫**
+   - 確保所有代碼已推送到 GitHub
+   - 確認包含 `Dockerfile`、`.dockerignore` 和 `render.yaml`
+
+2. **在 Render 創建新服務**
+   - 登入 [Render Dashboard](https://dashboard.render.com)
+   - 點擊 "New +" → "Web Service"
+   - 連接你的 GitHub 倉庫
+
+3. **配置服務**
+   - **Name**: `pdf-to-markdown-converter`（或自訂名稱）
+   - **Environment**: `Docker`
+   - **Region**: 選擇最接近你的區域
+   - **Branch**: `main`（或你的主分支）
+   - **Root Directory**: 留空（使用根目錄）
+   - **Dockerfile Path**: `./Dockerfile`
+   - **Docker Context**: `.`
+
+4. **環境變數（可選）**
+   - 由於現在用戶需要在前端輸入自己的 API key，**不需要**設置 `GOOGLE_API_KEY`
+   - 如果需要後備選項，可以在 Render Dashboard 的 Environment 頁面設置：
+     - `GOOGLE_API_KEY`: 你的 Gemini API key（可選，作為後備）
+
+5. **計劃選擇**
+   - 選擇 **Free** 計劃（免費方案）
+   - 免費方案限制：512MB RAM，每月 750 小時運行時間
+
+6. **部署**
+   - 點擊 "Create Web Service"
+   - Render 會自動開始構建和部署
+   - 構建過程可能需要 5-10 分鐘
+
+7. **訪問應用**
+   - 部署完成後，Render 會提供一個 URL（例如：`https://pdf-to-markdown-converter.onrender.com`）
+   - 訪問該 URL 即可使用應用
+
+### 注意事項
+
+- **免費方案限制**：
+  - 應用在 15 分鐘無活動後會進入休眠狀態
+  - 首次訪問休眠應用需要約 30-60 秒喚醒時間
+  - 每月 750 小時運行時間（約 31 天）
+
+- **API Key**：
+  - 用戶需要在前端輸入自己的 Google Gemini API key
+  - 可以在 [Google AI Studio](https://makersuite.google.com/app/apikey) 免費取得 API key
+
+- **健康檢查**：
+  - Render 會自動使用 `/health` 端點進行健康檢查
+
+### 升級到付費計劃
+
+如果需要更穩定的服務（無休眠、更多資源），可以升級到付費計劃：
+- **Starter**: $7/月，512MB RAM，無休眠
+- **Standard**: $25/月，2GB RAM，無休眠
+
 ## 授權
 
 依原專案授權。
