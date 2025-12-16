@@ -26,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const customPrompt = document.getElementById('customPrompt');
     const promptPreviewContent = document.getElementById('promptPreviewContent');
     const togglePromptPreview = document.getElementById('togglePromptPreview');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const toggleApiKeyVisibility = document.getElementById('toggleApiKeyVisibility');
+    const toggleIcon = document.getElementById('toggleIcon');
+    const apiKeyErrorMessage = document.getElementById('apiKeyErrorMessage');
 
     // Prompt 模板定義（與後端同步）
     const PROMPT_TEMPLATES = {
@@ -185,6 +189,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初始化 prompt 預覽
     updatePromptPreview();
+
+    // API Key 顯示/隱藏切換
+    if (toggleApiKeyVisibility && apiKeyInput) {
+        toggleApiKeyVisibility.addEventListener('click', () => {
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                if (toggleIcon) toggleIcon.textContent = '🙈';
+            } else {
+                apiKeyInput.type = 'password';
+                if (toggleIcon) toggleIcon.textContent = '👁️';
+            }
+        });
+    }
+
+    // 驗證 API Key 函數
+    function validateApiKey() {
+        if (!apiKeyInput) return false;
+        const apiKey = apiKeyInput.value.trim();
+        if (!apiKey) {
+            if (apiKeyErrorMessage) {
+                apiKeyErrorMessage.textContent = '請輸入 Gemini API Key';
+                apiKeyErrorMessage.style.display = 'block';
+            }
+            if (apiKeyInput) {
+                apiKeyInput.focus();
+                apiKeyInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            return false;
+        }
+        // 簡單驗證：API key 應該至少有一定長度
+        if (apiKey.length < 20) {
+            if (apiKeyErrorMessage) {
+                apiKeyErrorMessage.textContent = 'API Key 格式似乎不正確，請確認是否正確輸入';
+                apiKeyErrorMessage.style.display = 'block';
+            }
+            if (apiKeyInput) {
+                apiKeyInput.focus();
+            }
+            return false;
+        }
+        if (apiKeyErrorMessage) {
+            apiKeyErrorMessage.style.display = 'none';
+        }
+        return true;
+    }
 
     // Drag and drop handlers
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -490,6 +539,12 @@ document.addEventListener('DOMContentLoaded', () => {
             customPrompt.value = '';
         }
         updatePromptPreview();
+        
+        // 不清除 API Key（讓用戶可以繼續使用）
+        // 如果需要清除，取消下面的註解
+        // if (apiKeyInput) {
+        //     apiKeyInput.value = '';
+        // }
         promptPreviewExpanded = true;
         if (promptPreviewContent) {
             promptPreviewContent.style.display = 'block';
@@ -538,6 +593,11 @@ document.addEventListener('DOMContentLoaded', () => {
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return;
 
+        // 驗證 API Key
+        if (!validateApiKey()) {
+            return;
+        }
+
         // 驗證自訂 prompt
         if (promptTemplate && promptTemplate.value === 'custom') {
             if (!customPrompt || !customPrompt.value.trim()) {
@@ -571,6 +631,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const formData = new FormData();
         formData.append('file', currentFile);
+        
+        // 添加 API Key
+        if (apiKeyInput && apiKeyInput.value.trim()) {
+            formData.append('api_key', apiKeyInput.value.trim());
+        }
         
         // 處理 prompt_template：如果是自訂選項，傳送自訂文字；否則傳送模板 ID
         if (promptTemplate && promptTemplate.value) {

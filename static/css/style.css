@@ -133,6 +133,134 @@ main {
     animation: fadeInUp 0.6s ease-out 0.1s both;
 }
 
+/* API Key 輸入區域 */
+.api-key-section {
+    margin-bottom: 28px;
+    animation: fadeInUp 0.6s ease-out 0.15s both;
+}
+
+.api-key-card {
+    background: var(--card-bg);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.api-key-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.api-key-header h3 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 8px 0;
+    letter-spacing: -0.01em;
+}
+
+.api-key-hint {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0 0 16px 0;
+    line-height: 1.5;
+}
+
+.api-key-input-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.api-key-input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.9375rem;
+    font-family: 'Monaco', 'Courier New', 'Consolas', monospace;
+    background: var(--card-bg);
+    color: var(--text-main);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-sm);
+}
+
+.api-key-input:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-md);
+}
+
+.api-key-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1), var(--shadow-md);
+}
+
+.api-key-input::placeholder {
+    color: var(--text-secondary);
+}
+
+.btn-icon-toggle {
+    background: var(--card-bg);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-sm);
+    flex-shrink: 0;
+}
+
+.btn-icon-toggle:hover {
+    background: var(--bg-color);
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.btn-icon-toggle:active {
+    transform: scale(0.98);
+}
+
+.api-key-help {
+    margin: 12px 0 0 0;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.api-key-help a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.api-key-help a:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+    .api-key-card {
+        padding: 20px;
+    }
+    
+    .api-key-input-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .btn-icon-toggle {
+        width: 100%;
+    }
+}
+
 .info-card {
     background: var(--card-bg);
     border: 1px solid var(--border-color);

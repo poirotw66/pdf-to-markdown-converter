@@ -78,6 +78,7 @@ class PDFParser:
         max_processes: int = None,
         text_density_threshold: float = None,
         prompt_template: Optional[str] = None,
+        api_key: Optional[str] = None,
     ):
         """
         Initialize the PDF parser.
@@ -88,8 +89,14 @@ class PDFParser:
             text_density_threshold: Text density threshold (0-1) below which to use Gemini vision
             prompt_template: Prompt template ID ("slide", "table", "ocr") or custom prompt string.
                             If None, uses default template.
+            api_key: Google Gemini API key. If provided, will use this instead of settings.
         """
-        genai.configure(api_key=settings.google_api_key)
+        # Use provided API key or fall back to settings
+        api_key_to_use = api_key if api_key and api_key.strip() else settings.google_api_key
+        if not api_key_to_use or not api_key_to_use.strip():
+            raise ValueError("Google Gemini API key is required. Please provide api_key parameter or set GOOGLE_API_KEY in environment.")
+        
+        genai.configure(api_key=api_key_to_use.strip())
         self.model = genai.GenerativeModel(settings.gemini_model)
         
         # Thread pool for Gemini API calls (with rate limiting)

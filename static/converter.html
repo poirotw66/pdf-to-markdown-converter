@@ -56,6 +56,34 @@
                 </div>
             </div>
 
+            <!-- API Key 輸入區域 -->
+            <div class="api-key-section">
+                <div class="api-key-card">
+                    <div class="api-key-header">
+                        <h3>🔑 Gemini API Key</h3>
+                        <p class="api-key-hint">請輸入您的 Google Gemini API Key 以使用轉換功能</p>
+                    </div>
+                    <div class="api-key-input-group">
+                        <input 
+                            type="password" 
+                            id="apiKeyInput" 
+                            class="api-key-input" 
+                            placeholder="請輸入您的 Gemini API Key"
+                            autocomplete="off"
+                        >
+                        <button type="button" id="toggleApiKeyVisibility" class="btn-icon-toggle" title="顯示/隱藏">
+                            <span id="toggleIcon">👁️</span>
+                        </button>
+                    </div>
+                    <div id="apiKeyErrorMessage" class="error-message" style="display: none; margin-top: 10px;"></div>
+                    <p class="api-key-help">
+                        <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer">
+                            如何取得 API Key？
+                        </a>
+                    </p>
+                </div>
+            </div>
+
             <!-- 上傳區域 -->
             <div class="upload-area" id="uploadArea">
                 <div class="icon-container">
