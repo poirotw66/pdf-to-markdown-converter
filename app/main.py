@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.pdf_convert import router as pdf_convert_router
 from app.config import settings
+from app.metrics import service_metrics
 
 # Initialize logging
 from src.utils.logging_config import setup_logging
@@ -61,14 +62,19 @@ async def health():
     }
 
 
+@app.get("/metrics")
+async def metrics():
+    """Basic in-memory metrics endpoint."""
+    return service_metrics.snapshot()
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.getenv("PORT", settings.api_port))
+    port = int(os.getenv("PORT", str(settings.api_port)))
     uvicorn.run(
         "app.main:app",
         host=settings.api_host,
         port=port,
         reload=True,
     )
-

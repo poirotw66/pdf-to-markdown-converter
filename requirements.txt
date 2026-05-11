@@ -20,3 +20,6 @@ pydantic-settings>=2.0.0
 # Logging
 loguru>=0.7.0
 
+# Testing
+pytest>=8.0.0
+

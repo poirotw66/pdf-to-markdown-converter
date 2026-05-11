@@ -103,7 +103,7 @@ sudo apt-get install poppler-utils
 
 ```env
 GOOGLE_API_KEY=your-google-api-key
-GEMINI_MODEL=gemini-2.5-pro
+GEMINI_MODEL=gemini-pro-latest
 ```
 
 ### 可選配置
@@ -113,7 +113,19 @@ GEMINI_MODEL=gemini-2.5-pro
 PDF_TEXT_DENSITY_THRESHOLD=0.02  # 文字密度閾值（低於此值使用 Gemini Vision）
 PDF_MAX_WORKERS=4                # 最大工作線程數
 PDF_MAX_PROCESSES=2               # 最大進程數
+PDF_MAX_REQUESTS_PER_SECOND=50    # Gemini API 每秒最大請求數
 PDF_FORCE_PYMUPDF=false           # 強制僅使用 PyMuPDF
+PDF_MAX_UPLOAD_SIZE_MB=25         # 單檔上傳大小上限（MB）
+PDF_RETRY_ENABLED=true            # 啟用重試
+PDF_RETRY_MAX_ATTEMPTS=3          # 最大重試次數
+PDF_RETRY_INITIAL_DELAY=1.0       # 初始重試延遲秒數
+PDF_RETRY_MAX_DELAY=60.0          # 最大重試延遲秒數
+PDF_RETRY_EXPONENTIAL_BASE=2.0    # 重試退避倍數
+PDF_RETRY_JITTER=true             # 重試是否加入隨機抖動
+PDF_GRACEFUL_DEGRADATION_ENABLED=true         # 啟用優雅降級
+PDF_CIRCUIT_BREAKER_ENABLED=true              # 啟用斷路器
+PDF_CIRCUIT_BREAKER_FAILURE_THRESHOLD=5       # 斷路器失敗閾值
+PDF_CIRCUIT_BREAKER_RECOVERY_TIMEOUT=60.0     # 斷路器恢復秒數
 
 # 快取配置
 PDF_CACHE_ENABLED=true            # 啟用快取
@@ -142,6 +154,7 @@ python -m app.main
 
 * **前端介面**：http://localhost:8000/
 * **健康檢查**：http://localhost:8000/health
+* **基本指標**：http://localhost:8000/metrics
 * **轉換 API**：POST http://localhost:8000/api/v1/convert-pdf
 
 ### API 使用範例

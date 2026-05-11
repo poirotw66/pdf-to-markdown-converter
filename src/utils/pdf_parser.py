@@ -4,7 +4,7 @@ import io
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-from threading import Semaphore
+from threading import Semaphore, Lock
 try:
     import fitz  # PyMuPDF
 except ImportError:
@@ -100,11 +100,11 @@ class PDFParser:
         self.model = genai.GenerativeModel(settings.gemini_model)
         
         # Thread pool for Gemini API calls (with rate limiting)
-        self.max_workers = max_workers or getattr(settings, 'max_workers', 20)
+        self.max_workers = max_workers or settings.pdf_max_workers
         # Process pool for PDF to image conversion (CPU-intensive)
-        self.max_processes = max_processes or getattr(settings, 'max_processes', 4)
+        self.max_processes = max_processes or settings.pdf_max_processes
         # Text density threshold (characters per page area ratio)
-        self.text_density_threshold = text_density_threshold or getattr(settings, 'text_density_threshold', 0.02)
+        self.text_density_threshold = text_density_threshold or settings.pdf_text_density_threshold
         
         # Optional: force PyMuPDF only (disable Gemini vision)
         self.force_pymupdf = getattr(settings, 'pdf_force_pymupdf', False)
@@ -112,14 +112,15 @@ class PDFParser:
         # Rate limiting semaphore for Gemini API
         self.gemini_semaphore = Semaphore(self.max_workers)
         # Rate limiting: max requests per second
-        self.gemini_rate_limit = getattr(settings, 'gemini_rate_limit', 50)  # requests per second
+        self.gemini_rate_limit = settings.pdf_max_requests_per_second
         self.gemini_last_request_time = 0.0
         self.gemini_request_interval = 1.0 / self.gemini_rate_limit
+        self.gemini_rate_limit_lock = Lock()
         
         # Initialize cache
         cache_dir = getattr(settings, 'pdf_cache_dir', None)
         self.cache = PDFCache(cache_dir=cache_dir)
-        self.use_cache = getattr(settings, 'use_pdf_cache', True)
+        self.use_cache = settings.pdf_cache_enabled
         
         # Prompt template handling
         # If prompt_template is a template ID, use it; if it's a custom string, use it directly
@@ -134,10 +135,10 @@ class PDFParser:
         
         # Initialize circuit breaker for Gemini vision API if enabled
         self.gemini_circuit_breaker = None
-        if getattr(settings, 'circuit_breaker_enabled', True):
+        if settings.pdf_circuit_breaker_enabled:
             self.gemini_circuit_breaker = CircuitBreaker(
-                failure_threshold=getattr(settings, 'circuit_breaker_failure_threshold', 5),
-                recovery_timeout=getattr(settings, 'circuit_breaker_recovery_timeout', 60.0)
+                failure_threshold=settings.pdf_circuit_breaker_failure_threshold,
+                recovery_timeout=settings.pdf_circuit_breaker_recovery_timeout,
             )
     
     def _calculate_text_density(self, text: str, page_area: float = None) -> float:
@@ -210,11 +211,12 @@ class PDFParser:
         # Acquire semaphore for rate limiting
         with self.gemini_semaphore:
             # Rate limiting: ensure minimum interval between requests
-            current_time = time.time()
-            time_since_last = current_time - self.gemini_last_request_time
-            if time_since_last < self.gemini_request_interval:
-                time.sleep(self.gemini_request_interval - time_since_last)
-            self.gemini_last_request_time = time.time()
+            with self.gemini_rate_limit_lock:
+                current_time = time.time()
+                time_since_last = current_time - self.gemini_last_request_time
+                if time_since_last < self.gemini_request_interval:
+                    time.sleep(self.gemini_request_interval - time_since_last)
+                self.gemini_last_request_time = time.time()
             
             try:
                 # Use the prompt from instance variable (set during initialization or parse_pdf call)
@@ -235,13 +237,13 @@ class PDFParser:
                         image = image.convert('RGB')
                 
                 # Use Gemini to extract text from image with retry and circuit breaker
-                if getattr(settings, 'retry_enabled', True):
+                if settings.pdf_retry_enabled:
                     @retry_with_backoff(
-                        max_retries=getattr(settings, 'retry_max_attempts', 3),
-                        initial_delay=getattr(settings, 'retry_initial_delay', 1.0),
-                        max_delay=getattr(settings, 'retry_max_delay', 60.0),
-                        exponential_base=getattr(settings, 'retry_exponential_base', 2.0),
-                        jitter=getattr(settings, 'retry_jitter', True)
+                        max_retries=settings.pdf_retry_max_attempts,
+                        initial_delay=settings.pdf_retry_initial_delay,
+                        max_delay=settings.pdf_retry_max_delay,
+                        exponential_base=settings.pdf_retry_exponential_base,
+                        jitter=settings.pdf_retry_jitter,
                     )
                     def _generate_with_retry():
                         if self.gemini_circuit_breaker:
@@ -276,7 +278,7 @@ class PDFParser:
                             }
                         )
                         # Graceful degradation: return error message
-                        if getattr(settings, 'graceful_degradation_enabled', True):
+                        if settings.pdf_graceful_degradation_enabled:
                             return f"[無法從第 {page_num} 頁提取文字: {error_type.value}]"
                         raise
                 else:
@@ -300,7 +302,7 @@ class PDFParser:
                     exc_info=True
                 )
                 # Graceful degradation
-                if getattr(settings, 'graceful_degradation_enabled', True):
+                if settings.pdf_graceful_degradation_enabled:
                     return f"[無法從第 {page_num} 頁提取文字: {error_type.value}]"
                 return f"[無法從第 {page_num} 頁提取文字: {str(e)}]"
     
