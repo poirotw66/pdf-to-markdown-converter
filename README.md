@@ -193,7 +193,7 @@ curl -X POST "http://localhost:8000/api/v1/convert-pdf" \
 
 * **Web 框架**：FastAPI, Uvicorn
 * **PDF 處理**：PyMuPDF (fitz), pdf2image, Pillow
-* **AI 模型**：google-generativeai (Gemini Vision)
+* **AI 模型**：google-genai (Gemini Vision)
 * **配置管理**：pydantic-settings, python-dotenv
 * **日誌系統**：loguru
 * **前端**：原生 HTML/CSS/JavaScript (Marked.js for Markdown rendering)

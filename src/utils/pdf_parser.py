@@ -11,7 +11,14 @@ except ImportError:
     fitz = None  # Fallback if PyMuPDF not installed
 from pdf2image import convert_from_path
 from PIL import Image
-import google.generativeai as genai
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    USE_GOOGLE_GENAI_SDK = True
+except ImportError:
+    import google.generativeai as genai  # type: ignore
+    genai_types = None
+    USE_GOOGLE_GENAI_SDK = False
 from app.config import settings
 from src.utils.pdf_cache import PDFCache
 from src.utils.retry import (
@@ -96,8 +103,13 @@ class PDFParser:
         if not api_key_to_use or not api_key_to_use.strip():
             raise ValueError("Google Gemini API key is required. Please provide api_key parameter or set GOOGLE_API_KEY in environment.")
         
-        genai.configure(api_key=api_key_to_use.strip())
-        self.model = genai.GenerativeModel(settings.gemini_model)
+        if USE_GOOGLE_GENAI_SDK:
+            self.client = genai.Client(api_key=api_key_to_use.strip())
+            self.model = None
+        else:
+            genai.configure(api_key=api_key_to_use.strip())
+            self.client = None
+            self.model = genai.GenerativeModel(settings.gemini_model)
         
         # Thread pool for Gemini API calls (with rate limiting)
         self.max_workers = max_workers or settings.pdf_max_workers
@@ -235,6 +247,31 @@ class PDFParser:
                     image = image_input
                     if image.mode != 'RGB':
                         image = image.convert('RGB')
+
+                generate_config = {
+                    "temperature": 0.1,
+                    "top_p": 0.95,
+                    "top_k": 40,
+                }
+
+                def _call_gemini_model():
+                    if USE_GOOGLE_GENAI_SDK:
+                        image_bytes = io.BytesIO()
+                        image.save(image_bytes, format="PNG")
+                        image_part = genai_types.Part.from_bytes(
+                            data=image_bytes.getvalue(),
+                            mime_type="image/png",
+                        )
+                        return self.client.models.generate_content(
+                            model=settings.gemini_model,
+                            contents=[prompt, image_part],
+                            config=genai_types.GenerateContentConfig(**generate_config),
+                        )
+
+                    return self.model.generate_content(
+                        [prompt, image],
+                        generation_config=generate_config,
+                    )
                 
                 # Use Gemini to extract text from image with retry and circuit breaker
                 if settings.pdf_retry_enabled:
@@ -248,22 +285,9 @@ class PDFParser:
                     def _generate_with_retry():
                         if self.gemini_circuit_breaker:
                             return self.gemini_circuit_breaker.call(
-                                self.model.generate_content,
-                                [prompt, image],
-                                generation_config={
-                                    "temperature": 0.1,
-                                    "top_p": 0.95,
-                                    "top_k": 40,
-                                }
+                                _call_gemini_model,
                             )
-                        return self.model.generate_content(
-                            [prompt, image],
-                            generation_config={
-                                "temperature": 0.1,
-                                "top_p": 0.95,
-                                "top_k": 40,
-                            }
-                        )
+                        return _call_gemini_model()
                     
                     try:
                         response = _generate_with_retry()
@@ -282,16 +306,10 @@ class PDFParser:
                             return f"[無法從第 {page_num} 頁提取文字: {error_type.value}]"
                         raise
                 else:
-                    response = self.model.generate_content(
-                        [prompt, image],
-                        generation_config={
-                            "temperature": 0.1,
-                            "top_p": 0.95,
-                            "top_k": 40,
-                        }
-                    )
+                    response = _call_gemini_model()
                 
-                extracted_text = response.text.strip()
+                extracted_text = getattr(response, "text", "") or ""
+                extracted_text = extracted_text.strip()
                 return extracted_text
                 
             except Exception as e:
