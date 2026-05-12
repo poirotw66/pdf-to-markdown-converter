@@ -7,7 +7,18 @@ GOOGLE_API_KEY=your-google-api-key-here
 GEMINI_MODEL=gemini-pro-latest
 
 # PDF Processing
-PDF_TEXT_DENSITY_THRESHOLD=0.02
+# Density = chars / (page width * height in PDF points). Used only if PDF_GEMINI_ON_LOW_TEXT_DENSITY=true.
+PDF_TEXT_DENSITY_THRESHOLD=0.0008
+# Legacy behavior: route to Gemini when density is below the threshold (often sends almost every page).
+PDF_GEMINI_ON_LOW_TEXT_DENSITY=false
+# Tables/charts: PyMuPDF signals (tabular text, vector paths, embedded images) -> Gemini when true.
+PDF_GEMINI_ON_VISUAL_STRUCTURE=true
+# Minimum PyMuPDF drawing records on a page to treat as vector chart/diagram.
+PDF_GEMINI_VECTOR_PATH_MIN=40
+# Image bbox area / page area; 0 = any embedded image counts. Example 0.015 = 1.5% of page.
+PDF_GEMINI_EMBEDDED_IMAGE_AREA_RATIO_MIN=0.0
+# Fewer extracted characters than this -> Gemini (covers title slides / scanned sparse pages).
+PDF_GEMINI_IF_CHARS_BELOW=55
 PDF_MAX_WORKERS=4
 PDF_MAX_PROCESSES=2
 PDF_MAX_REQUESTS_PER_SECOND=50

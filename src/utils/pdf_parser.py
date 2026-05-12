@@ -1,4 +1,4 @@
-"""PDF parser with hybrid approach: PyMuPDF fast path + Gemini vision for low-density pages."""
+"""PDF parser with hybrid approach: PyMuPDF fast path + Gemini vision for selected pages."""
 import time
 import io
 from pathlib import Path
@@ -28,6 +28,94 @@ from src.utils.prompts import get_prompt, PROMPT_TEMPLATES
 from src.utils.logging_config import get_logger
 
 log = get_logger(__name__)
+
+
+def routing_use_gemini_vision(
+    *,
+    force_pymupdf: bool,
+    gemini_on_low_text_density: bool,
+    text_density_threshold: float,
+    gemini_on_visual_structure: bool,
+    gemini_if_chars_below: int,
+    density: float,
+    text: str,
+    has_visual_structure: bool,
+) -> bool:
+    """
+    Decide whether to send a page to Gemini vision after PyMuPDF extraction.
+
+    Density is len(text) / (page_width * page_height) in PDF points. A naive high
+    threshold (e.g. 0.02) flags almost every normal page as low-density.
+    """
+    if force_pymupdf:
+        return False
+    stripped = text.strip()
+    char_count = len(stripped)
+    if char_count == 0:
+        return True
+    if char_count < gemini_if_chars_below:
+        return True
+    if gemini_on_visual_structure and has_visual_structure:
+        return True
+    if gemini_on_low_text_density and density < text_density_threshold:
+        return True
+    return False
+
+
+def _detect_visual_structure_signals(
+    page: Any,
+    text: str,
+    *,
+    vector_path_min: int,
+    embedded_image_area_ratio_min: float,
+) -> tuple[bool, tuple[str, ...]]:
+    """
+    Heuristics for table/chart-like pages: tabular text, vector drawings, embedded images.
+
+    Returns:
+        (should_treat_as_visual, reason_tags for logging)
+    """
+    tags: list[str] = []
+    raw = text or ""
+    if "\t" in raw or raw.count("  ") > 5:
+        tags.append("tabular_text")
+
+    try:
+        drawings = page.get_drawings() or []
+    except Exception:
+        drawings = []
+    if len(drawings) >= vector_path_min:
+        tags.append("vector_graphics")
+
+    try:
+        page_area = float(page.rect.width * page.rect.height)
+    except Exception:
+        page_area = 0.0
+
+    try:
+        images = page.get_images(full=True) or []
+    except Exception:
+        images = []
+
+    if images and page_area > 0:
+        if embedded_image_area_ratio_min <= 0.0:
+            tags.append("embedded_image")
+        else:
+            for entry in images:
+                xref = entry[0]
+                try:
+                    rects = page.get_image_rects(xref)
+                except Exception:
+                    rects = []
+                for rect in rects:
+                    ratio = (rect.width * rect.height) / page_area
+                    if ratio >= embedded_image_area_ratio_min:
+                        tags.append("large_embedded_image")
+                        break
+                if tags and tags[-1] == "large_embedded_image":
+                    break
+
+    return bool(tags), tuple(tags)
 
 
 def _convert_pdf_page_to_image(pdf_path: str, page_num: int, dpi: int = 150) -> Image.Image:
@@ -77,7 +165,7 @@ def _convert_page_wrapper(args):
 
 
 class PDFParser:
-    """Hybrid PDF parser: PyMuPDF for text extraction, Gemini vision for low-density pages."""
+    """Hybrid PDF parser: PyMuPDF text extraction plus optional Gemini vision routing."""
     
     def __init__(
         self,
@@ -93,7 +181,8 @@ class PDFParser:
         Args:
             max_workers: Maximum number of worker threads for Gemini API calls
             max_processes: Maximum number of processes for PDF to image conversion
-            text_density_threshold: Text density threshold (0-1) below which to use Gemini vision
+            text_density_threshold: Used only when settings.pdf_gemini_on_low_text_density is True;
+                density is chars / (page area in PDF points).
             prompt_template: Prompt template ID ("slide", "table", "ocr") or custom prompt string.
                             If None, uses default template.
             api_key: Google Gemini API key. If provided, will use this instead of settings.
@@ -119,7 +208,12 @@ class PDFParser:
         self.text_density_threshold = text_density_threshold or settings.pdf_text_density_threshold
         
         # Optional: force PyMuPDF only (disable Gemini vision)
-        self.force_pymupdf = getattr(settings, 'pdf_force_pymupdf', False)
+        self.force_pymupdf = getattr(settings, "pdf_force_pymupdf", False)
+        self.gemini_on_low_text_density = settings.pdf_gemini_on_low_text_density
+        self.gemini_on_visual_structure = settings.pdf_gemini_on_visual_structure
+        self.gemini_vector_path_min = settings.pdf_gemini_vector_path_min
+        self.gemini_embedded_image_area_ratio_min = settings.pdf_gemini_embedded_image_area_ratio_min
+        self.gemini_if_chars_below = settings.pdf_gemini_if_chars_below
         
         # Rate limiting semaphore for Gemini API
         self.gemini_semaphore = Semaphore(self.max_workers)
@@ -173,45 +267,67 @@ class PDFParser:
             return char_count / page_area
         return char_count / 10000.0  # Normalize by arbitrary area
     
-    def _extract_text_with_pymupdf(self, pdf_path: str, page_num: int) -> Tuple[str, float, bool]:
+    def _extract_text_with_pymupdf(
+        self, pdf_path: str, page_num: int
+    ) -> Tuple[str, float, bool, Tuple[str, ...]]:
         """
         Extract text from PDF page using PyMuPDF (fast path).
-        
+
         Args:
             pdf_path: Path to PDF file
             page_num: Page number (1-indexed)
-            
+
         Returns:
-            Tuple of (extracted_text, text_density, has_table)
+            Tuple of (extracted_text, text_density, has_visual_structure, visual_reason_tags)
         """
         if fitz is None:
-            return "", 0.0, False
-        
+            return "", 0.0, False, ()
+
         try:
             doc = fitz.open(pdf_path)
-            page = doc[page_num - 1]  # Convert to 0-indexed
-            
-            # Extract text
-            text = page.get_text()
-            
-            # Get page dimensions for density calculation
-            page_rect = page.rect
-            page_area = page_rect.width * page_rect.height
-            
-            # Calculate text density
-            text_density = self._calculate_text_density(text, page_area)
-            
-            # Check for tables (simple heuristic: if text contains tab characters or multiple spaces)
-            has_table = '\t' in text or text.count('  ') > 5
-            
-            doc.close()
-            
-            return text.strip(), text_density, has_table
-            
+            try:
+                page = doc[page_num - 1]  # Convert to 0-indexed
+
+                text = page.get_text()
+
+                page_rect = page.rect
+                page_area = page_rect.width * page_rect.height
+
+                text_density = self._calculate_text_density(text, page_area)
+
+                has_visual, visual_tags = _detect_visual_structure_signals(
+                    page,
+                    text,
+                    vector_path_min=self.gemini_vector_path_min,
+                    embedded_image_area_ratio_min=self.gemini_embedded_image_area_ratio_min,
+                )
+
+                return text.strip(), text_density, has_visual, visual_tags
+            finally:
+                doc.close()
+
         except Exception as e:
             print(f"Error extracting text with PyMuPDF from page {page_num}: {str(e)}")
-            return "", 0.0, False
-    
+            return "", 0.0, False, ()
+
+    def _should_use_gemini_vision(
+        self,
+        density: float,
+        text: str,
+        has_visual_structure: bool,
+    ) -> bool:
+        """See routing_use_gemini_vision for routing rules."""
+        return routing_use_gemini_vision(
+            force_pymupdf=self.force_pymupdf,
+            gemini_on_low_text_density=self.gemini_on_low_text_density,
+            text_density_threshold=self.text_density_threshold,
+            gemini_on_visual_structure=self.gemini_on_visual_structure,
+            gemini_if_chars_below=self.gemini_if_chars_below,
+            density=density,
+            text=text,
+            has_visual_structure=has_visual_structure,
+        )
+
     def _extract_text_from_image(self, image_input, page_num: int) -> str:
         """
         Extract text from a single PDF page image using Gemini vision.
@@ -331,7 +447,7 @@ class PDFParser:
         prompt_template: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Parse PDF file using hybrid approach: PyMuPDF first, Gemini vision for low-density pages.
+        Parse PDF file using hybrid approach: PyMuPDF first, Gemini vision when routing rules say so.
         
         Args:
             pdf_path: Path to PDF file
@@ -374,7 +490,7 @@ class PDFParser:
             else:
                 print("No cache found, starting fresh")
         
-        print("Using hybrid approach: PyMuPDF fast path + Gemini vision for low-density pages")
+        print("Using hybrid approach: PyMuPDF fast path + Gemini vision when routing selects it")
         
         pages_data = []
         pages_need_gemini = []  # Pages that need Gemini vision processing
@@ -410,23 +526,32 @@ class PDFParser:
                     pages_data.append(cached_page)
                     continue
             
-            text, density, has_table = self._extract_text_with_pymupdf(str(pdf_path), page_num)
-            
-            # Determine if we need Gemini vision
-            # Use Gemini if: low text density OR has table (PyMuPDF may miss table structure)
-            needs_gemini = (
-                not self.force_pymupdf
-                and (
-                    density < self.text_density_threshold
-                    or has_table
-                    or len(text.strip()) < 50  # Very short text might be image-based
-                )
+            text, density, has_visual, visual_tags = self._extract_text_with_pymupdf(
+                str(pdf_path), page_num
             )
-            
+
+            needs_gemini = self._should_use_gemini_vision(density, text, has_visual)
+
             if needs_gemini:
                 fallback_pymupdf_text[page_num] = text.strip()
                 pages_need_gemini.append(page_num)
-                print(f"  Page {page_num}: Low density ({density:.4f}) or has table - will use Gemini vision")
+                reason_parts: list[str] = []
+                if not text.strip():
+                    reason_parts.append("no extractable text")
+                elif len(text.strip()) < self.gemini_if_chars_below:
+                    reason_parts.append(
+                        f"few extracted chars ({len(text.strip())}<{self.gemini_if_chars_below})"
+                    )
+                if self.gemini_on_visual_structure and has_visual:
+                    reason_parts.append(
+                        "visual_structure(" + ",".join(visual_tags) + ")"
+                        if visual_tags
+                        else "visual_structure"
+                    )
+                if self.gemini_on_low_text_density and density < self.text_density_threshold:
+                    reason_parts.append(f"low density ({density:.6f}<{self.text_density_threshold})")
+                reason = ", ".join(reason_parts) if reason_parts else "vision routing"
+                print(f"  Page {page_num}: {reason} — will use Gemini vision")
             else:
                 # Use PyMuPDF result directly and cache it
                 page_data = {

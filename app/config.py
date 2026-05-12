@@ -19,7 +19,20 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-pro-latest"
 
     # PDF Processing
-    pdf_text_density_threshold: float = 0.02
+    # chars / (page width * height in PDF points). Old default 0.02 required ~10k chars on A4
+    # to stay on PyMuPDF; routing now uses this only when pdf_gemini_on_low_text_density is True.
+    pdf_text_density_threshold: float = 0.0008
+    # When True, pages with density below pdf_text_density_threshold use Gemini (legacy-style gate).
+    pdf_gemini_on_low_text_density: bool = False
+    # When True, route pages with tables/charts signals to Gemini (text tabs/spaces,
+    # many vector paths, or large embedded images).
+    pdf_gemini_on_visual_structure: bool = True
+    # Minimum vector drawing ops (PyMuPDF get_drawings length) to treat as chart/diagram.
+    pdf_gemini_vector_path_min: int = 40
+    # Embedded image bbox area / page area must reach this ratio to count (0 = any image).
+    pdf_gemini_embedded_image_area_ratio_min: float = 0.0
+    # When PyMuPDF extracted fewer than this many non-whitespace characters, try Gemini vision.
+    pdf_gemini_if_chars_below: int = 55
     pdf_max_workers: int = 4
     pdf_max_processes: int = 2
     pdf_max_requests_per_second: int = 50

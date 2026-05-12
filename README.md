@@ -118,7 +118,14 @@ GEMINI_MODEL=gemini-pro-latest
 
 ```env
 # PDF 處理配置
-PDF_TEXT_DENSITY_THRESHOLD=0.02  # 文字密度閾值（低於此值使用 Gemini Vision）
+# 密度 = 擷取字元數 / (頁面寬×高，PDF points)。舊版預設 0.02 在 A4 上約需上萬字才「不算低密度」，幾乎整份都走 Gemini。
+# 僅在 PDF_GEMINI_ON_LOW_TEXT_DENSITY=true 時會用此閾值做路由。
+PDF_TEXT_DENSITY_THRESHOLD=0.0008
+PDF_GEMINI_ON_LOW_TEXT_DENSITY=false   # true 時恢復「低密度即走 Vision」行為（類似舊版）
+PDF_GEMINI_ON_VISUAL_STRUCTURE=true    # 表格／圖表類訊號（文字 tab、向量圖、嵌入圖）走 Gemini
+PDF_GEMINI_VECTOR_PATH_MIN=40          # 單頁向量繪圖筆數門檻（圖表常較高）
+PDF_GEMINI_EMBEDDED_IMAGE_AREA_RATIO_MIN=0.0  # 嵌入圖面積占頁面比例；0 表示任一幅圖即視為圖表頁
+PDF_GEMINI_IF_CHARS_BELOW=55           # PyMuPDF 擷取字數低於此則走 Vision（封面、掃描稀疏頁）
 PDF_MAX_WORKERS=4                # 最大工作線程數
 PDF_MAX_PROCESSES=2               # 最大進程數
 PDF_MAX_REQUESTS_PER_SECOND=50    # Gemini API 每秒最大請求數
@@ -195,10 +202,11 @@ curl -X POST "http://localhost:8000/api/v1/convert-pdf" \
 
 本專案採用**混合解析策略**，結合兩種方法的優勢：
 
-1. **PyMuPDF 快速路徑**：對於文字密度高的頁面，直接提取文字，速度快、成本低
-2. **Gemini Vision**：對於文字密度低或包含圖表的頁面，使用 AI 視覺模型進行結構化提取
+1. **PyMuPDF 快速路徑**：多數內容頁直接擷取文字，速度快、成本低
+2. **Gemini Vision**：擷取字數過少、偵測到**表格／圖表類版面訊號**（tab／多空格文字、大量向量繪圖、嵌入圖片），或你手動開啟的「低密度」規則成立時，使用視覺模型
 
-系統會自動判斷每頁的文字密度，智能選擇最適合的解析方法。
+預設**不再**用「密度 < 0.02」當主路由。需要舊行為時，請在 `.env` 設定 `PDF_GEMINI_ON_LOW_TEXT_DENSITY=true` 並調整 `PDF_TEXT_DENSITY_THRESHOLD`。  
+圖表／表格相關路由見 `PDF_GEMINI_ON_VISUAL_STRUCTURE` 與 `PDF_GEMINI_VECTOR_PATH_MIN`、`PDF_GEMINI_EMBEDDED_IMAGE_AREA_RATIO_MIN`。
 
 ### 主要依賴
 
