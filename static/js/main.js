@@ -114,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let pdfPreviewUrl = null;
     let markdownContent = null;
     let promptPreviewExpanded = true;
+    const SUPPORTED_EXTENSIONS = ['.pdf', '.docx', '.pptx'];
 
     // Prompt 預覽相關函數
     function updatePromptPreview() {
@@ -281,20 +282,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 size: file.size
             });
             
-            // 檢查文件類型（允許 PDF 或沒有類型的情況，因為某些瀏覽器可能不正確識別 PDF）
-            const isPDF = file.type === 'application/pdf' || 
-                         file.name.toLowerCase().endsWith('.pdf') ||
-                         (file.type === '' && file.name.toLowerCase().endsWith('.pdf'));
-            
-            if (!isPDF) {
+            const lowerFileName = file.name.toLowerCase();
+            const hasSupportedExtension = SUPPORTED_EXTENSIONS.some(ext => lowerFileName.endsWith(ext));
+
+            if (!hasSupportedExtension) {
                 console.warn('文件類型不符合要求:', file.type, file.name);
                 if (uploadErrorMessage) {
-                    uploadErrorMessage.textContent = `請上傳 PDF 檔案（.pdf 格式）。您上傳的是：${file.type || '未知類型'} (${file.name})`;
+                    uploadErrorMessage.textContent = `請上傳 PDF、DOCX 或 PPTX 檔案。您上傳的是：${file.type || '未知類型'} (${file.name})`;
                     uploadErrorMessage.style.display = 'block';
                     // 確保錯誤訊息可見
                     uploadErrorMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 } else {
-                    alert('請上傳 PDF 檔案（.pdf 格式）');
+                    alert('請上傳 PDF、DOCX 或 PPTX 檔案');
                 }
                 fileInput.value = ''; // 清除選擇
                 return;
@@ -380,6 +379,27 @@ document.addEventListener('DOMContentLoaded', () => {
             pdfPreviewUrl = null;
         }
         
+        const isPDFFile = file.name.toLowerCase().endsWith('.pdf');
+        if (!isPDFFile) {
+            if (pdfPreviewEmbed) {
+                pdfPreviewEmbed.style.display = 'none';
+                pdfPreviewEmbed.src = '';
+            }
+            if (pdfPreview) {
+                pdfPreview.style.display = 'none';
+                pdfPreview.data = '';
+            }
+            if (pdfPreviewFallback) {
+                pdfPreviewFallback.style.display = 'none';
+                pdfPreviewFallback.src = '';
+            }
+            if (pdfPreviewError) {
+                pdfPreviewError.innerHTML = '<p style="margin-bottom: 15px;">Office 檔案不提供原始預覽，系統會先轉成 PDF 再轉換為 Markdown。</p>';
+                pdfPreviewError.style.display = 'block';
+            }
+            return;
+        }
+
         // 預覽 PDF - 使用 embed、object 和 iframe 多重備援
         try {
             pdfPreviewUrl = URL.createObjectURL(file);
@@ -576,7 +596,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const downloadHandler = () => {
             const a = document.createElement('a');
             a.href = downloadUrl;
-            a.download = filename.replace('.pdf', '.md');
+            const outputName = filename.replace(/\.[^.]+$/, '') || 'converted';
+            a.download = `${outputName}.md`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -611,7 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         convertBtn.disabled = true;
         convertBtn.textContent = '轉換中...';
-        fileStatus.textContent = '正在轉換 PDF...';
+        fileStatus.textContent = '正在轉換文件...';
         progressContainer.style.display = 'block';
         progressBar.style.width = '30%';
         previewConversionArea.classList.add('processing');

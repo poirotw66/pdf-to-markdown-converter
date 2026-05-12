@@ -1,7 +1,9 @@
 """API routes for PDF to Markdown conversion (standalone)."""
 import re
 import shutil
+import subprocess
 import tempfile
+import time
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form
 from fastapi.responses import FileResponse
@@ -16,16 +18,18 @@ log = get_logger(__name__)
 router = APIRouter()
 UPLOAD_CHUNK_SIZE = 1024 * 1024
 SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
+SUPPORTED_FILE_EXTENSIONS = {".pdf", ".docx", ".pptx"}
 
 
-def _build_safe_pdf_filename(original_filename: str | None) -> str:
-    """Return a normalized and safe PDF filename."""
+def _build_safe_filename(original_filename: str | None) -> str:
+    """Return a normalized and safe filename preserving supported extension."""
     base_name = Path(original_filename or "upload.pdf").name
     normalized_name = SAFE_FILENAME_PATTERN.sub("_", base_name).strip("._")
-    if not normalized_name.lower().endswith(".pdf"):
-        normalized_name = f"{Path(normalized_name).stem}.pdf"
+    extension = Path(normalized_name).suffix.lower()
+    if extension not in SUPPORTED_FILE_EXTENSIONS:
+        extension = ".pdf"
     stem = Path(normalized_name).stem or "upload"
-    return f"{stem}.pdf"
+    return f"{stem}{extension}"
 
 
 async def _save_upload_file(upload_file: UploadFile, destination_path: Path, max_bytes: int) -> int:
@@ -40,11 +44,103 @@ async def _save_upload_file(upload_file: UploadFile, destination_path: Path, max
             if total_bytes > max_bytes:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"PDF file is too large. Maximum allowed size is {settings.pdf_max_upload_size_mb} MB.",
+                    detail=f"Uploaded file is too large. Maximum allowed size is {settings.pdf_max_upload_size_mb} MB.",
                 )
             destination.write(chunk)
     await upload_file.seek(0)
     return total_bytes
+
+
+def _convert_office_to_pdf(source_path: Path, temp_dir: Path) -> Path:
+    """Convert docx/pptx file to PDF using LibreOffice in headless mode."""
+    output_dir = temp_dir / "converted_pdf"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    # Isolated user profile per request so parallel soffice processes do not lock the default profile.
+    profile_dir = temp_dir / "lo_user_profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    profile_uri = profile_dir.resolve().as_uri()
+
+    command = [
+        settings.office_converter_bin,
+        f"-env:UserInstallation={profile_uri}",
+        "--headless",
+        "--norestore",
+        "--nologo",
+        "--nodefault",
+        "--nolockcheck",
+        "--convert-to",
+        "pdf",
+        "--outdir",
+        str(output_dir),
+        str(source_path),
+    ]
+
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=settings.office_conversion_timeout_seconds,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Office conversion service is unavailable. Please install LibreOffice on the server.",
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="Office to PDF conversion timed out. Please try a smaller file.",
+        ) from exc
+
+    if completed.returncode != 0:
+        log.error(
+            "Office to PDF conversion failed",
+            extra={"stderr": completed.stderr, "stdout": completed.stdout, "code": completed.returncode},
+        )
+        raise HTTPException(
+            status_code=422,
+            detail="Failed to convert Office file to PDF. Please verify the file format.",
+        )
+
+    converted_pdf_path = output_dir / f"{source_path.stem}.pdf"
+    if converted_pdf_path.exists():
+        return converted_pdf_path
+
+    generated_files = sorted(output_dir.glob("*.pdf"))
+    if generated_files:
+        return generated_files[0]
+
+    raise HTTPException(
+        status_code=422,
+        detail="Failed to convert Office file to PDF. Please verify the file format.",
+    )
+
+
+def _save_office_converted_pdf_copy(temp_pdf_path: Path, original_filename: str) -> None:
+    """Copy intermediate PDF to configured directory after Office -> PDF step."""
+    save_dir_raw = (settings.office_intermediate_pdf_save_dir or "").strip()
+    if not save_dir_raw:
+        return
+    save_dir = Path(save_dir_raw).expanduser()
+    try:
+        save_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        log.error(
+            f"Cannot create office intermediate PDF save directory: {save_dir}",
+            exc_info=True,
+        )
+        return
+    stem = Path(original_filename or "upload").stem or "converted"
+    destination = save_dir / f"{stem}.pdf"
+    if destination.exists():
+        destination = save_dir / f"{stem}_{int(time.time())}.pdf"
+    try:
+        shutil.copy2(temp_pdf_path, destination)
+        log.info(f"Saved intermediate PDF (Office conversion) to {destination}")
+    except OSError as exc:
+        log.error(f"Failed to copy intermediate PDF to {destination}: {exc}", exc_info=True)
 
 
 def cleanup_temp_dir(path: Path):
@@ -53,7 +149,7 @@ def cleanup_temp_dir(path: Path):
         if path.exists():
             shutil.rmtree(path)
             log.info(f"Cleaned up temporary directory: {path}")
-    except Exception as e:
+    except OSError as e:
         log.error(f"Error cleaning up temporary directory {path}: {e}")
 
 
@@ -65,18 +161,23 @@ async def convert_pdf(
     api_key: str | None = Form(None),
 ):
     """
-    Convert uploaded PDF to Markdown.
+    Convert uploaded PDF/DOCX/PPTX to Markdown.
 
     Args:
-        file: PDF file to convert
+        file: PDF, DOCX, or PPTX file to convert
         prompt_template: Prompt template ID or custom prompt string
         api_key: Google Gemini API key (required if not set in environment)
     """
     service_metrics.increment("conversion_requests_total")
 
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
+    if not file.filename:
         service_metrics.increment("conversion_rejected_total")
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+        raise HTTPException(status_code=400, detail="A file is required")
+
+    input_extension = Path(file.filename).suffix.lower()
+    if input_extension not in SUPPORTED_FILE_EXTENSIONS:
+        service_metrics.increment("conversion_rejected_total")
+        raise HTTPException(status_code=400, detail="Only PDF, DOCX, and PPTX files are supported")
 
     # Use provided API key or fall back to environment variable
     # If neither is available, raise an error
@@ -97,19 +198,25 @@ async def convert_pdf(
         )
 
     temp_dir = Path(tempfile.mkdtemp())
-    safe_filename = _build_safe_pdf_filename(file.filename)
-    temp_pdf_path = temp_dir / safe_filename
+    safe_filename = _build_safe_filename(file.filename)
+    temp_input_path = temp_dir / safe_filename
 
     try:
         max_upload_bytes = settings.pdf_max_upload_size_mb * 1024 * 1024
         uploaded_bytes = await _save_upload_file(
             upload_file=file,
-            destination_path=temp_pdf_path,
+            destination_path=temp_input_path,
             max_bytes=max_upload_bytes,
         )
         service_metrics.increment("conversion_uploaded_bytes_total", uploaded_bytes)
 
-        log.info(f"Processing PDF: {file.filename}")
+        temp_pdf_path = temp_input_path
+        if input_extension in {".docx", ".pptx"}:
+            log.info(f"Converting Office document to PDF: {file.filename}")
+            temp_pdf_path = _convert_office_to_pdf(source_path=temp_input_path, temp_dir=temp_dir)
+            _save_office_converted_pdf_copy(temp_pdf_path, file.filename or "upload")
+
+        log.info(f"Processing document: {file.filename}")
 
         # Initialize parser and exporter with API key
         parser = PDFParser(prompt_template=prompt_template, api_key=api_key_to_use)
@@ -150,4 +257,3 @@ async def convert_pdf(
             status_code=500,
             detail="Failed to convert PDF due to an internal error.",
         ) from exc
-

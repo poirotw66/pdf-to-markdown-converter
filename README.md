@@ -46,7 +46,7 @@
 
 ## 功能特點
 
-- 📄 PDF 上傳與轉換（支援多種提示樣板）
+- 📄 PDF / DOCX / PPTX 上傳與轉換（Office 會先轉 PDF）
 - 👁️ 即時 PDF 預覽
 - 📝 Markdown 預覽渲染
 - 🔄 左右分欄對比
@@ -97,6 +97,14 @@ brew install poppler
 sudo apt-get install poppler-utils
 ```
 
+若要支援 DOCX / PPTX，需安裝 LibreOffice（用於先轉 PDF）：
+```bash
+# macOS
+brew install --cask libreoffice
+# Ubuntu/Debian
+sudo apt-get install libreoffice
+```
+
 ## 環境變數
 
 請依 `ENV_EXAMPLE.md` 建立 `.env`，至少需設定：
@@ -126,6 +134,9 @@ PDF_GRACEFUL_DEGRADATION_ENABLED=true         # 啟用優雅降級
 PDF_CIRCUIT_BREAKER_ENABLED=true              # 啟用斷路器
 PDF_CIRCUIT_BREAKER_FAILURE_THRESHOLD=5       # 斷路器失敗閾值
 PDF_CIRCUIT_BREAKER_RECOVERY_TIMEOUT=60.0     # 斷路器恢復秒數
+OFFICE_CONVERTER_BIN=soffice                  # Office 轉 PDF 執行檔（macOS Homebrew 常為 soffice；Linux 亦可）
+OFFICE_CONVERSION_TIMEOUT_SECONDS=120          # Office 轉 PDF 逾時秒數
+OFFICE_INTERMEDIATE_PDF_SAVE_DIR=               # 選填：DOCX/PPTX 轉出的中繼 PDF 要複製到的目錄（空則不儲存）
 
 # 快取配置
 PDF_CACHE_ENABLED=true            # 啟用快取
@@ -160,7 +171,7 @@ python -m app.main
 ### API 使用範例
 
 ```bash
-# 使用預設樣板
+# 使用預設樣板（支援 .pdf / .docx / .pptx）
 curl -X POST "http://localhost:8000/api/v1/convert-pdf" \
   -F "file=@document.pdf" \
   -F "prompt_template=slide"

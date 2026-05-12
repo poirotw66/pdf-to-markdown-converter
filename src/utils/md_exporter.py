@@ -1,6 +1,22 @@
 """Export PDF pages to Markdown files."""
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
+
+def _extraction_timestamp_iso(pages_data: List[Dict[str, Any]]) -> str:
+    """
+    Prefer cache timestamps from page dicts (when loaded from disk cache).
+    Otherwise use the moment this summary file is written (UTC).
+    """
+    stamps: list[str] = []
+    for page in pages_data:
+        ts = page.get("cached_at")
+        if ts:
+            stamps.append(str(ts))
+    if stamps:
+        return max(stamps)
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class MDExporter:
@@ -126,7 +142,7 @@ class MDExporter:
 
 **Source:** {pdf_path.name}  
 **Total Pages:** {len(pages_data)}  
-**Extraction Date:** {pages_data[0].get('cached_at', 'N/A') if pages_data else 'N/A'}
+**Extraction Date:** {_extraction_timestamp_iso(pages_data)}
 
 ---
 

@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     pdf_max_requests_per_second: int = 50
     pdf_force_pymupdf: bool = False
     pdf_max_upload_size_mb: int = 25
+    office_converter_bin: str = "soffice"
+    office_conversion_timeout_seconds: int = 120
+    # When set, after DOCX/PPTX -> PDF conversion, copy the intermediate PDF here (empty = disabled).
+    office_intermediate_pdf_save_dir: str = ""
 
     # Reliability and fallback behavior
     pdf_retry_enabled: bool = True

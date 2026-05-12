@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' blob:; object-src 'self' blob:; frame-src 'self' blob:;">
-    <title>PDF 轉 Markdown 轉換器</title>
+    <title>文件轉 Markdown 轉換器</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,8 +14,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>PDF 轉 Markdown</h1>
-            <p>上傳您的 PDF 文件，我們將其轉換為結構化的 Markdown 格式</p>
+            <h1>文件轉 Markdown</h1>
+            <p>上傳 PDF、DOCX 或 PPTX 文件，我們將其轉換為結構化的 Markdown 格式</p>
         </header>
 
         <main>
@@ -91,9 +91,9 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                 </div>
-                <h3>拖放 PDF 檔案至此，或點擊上傳</h3>
-                <p class="support-text">支援 PDF 格式</p>
-                <input type="file" id="fileInput" accept=".pdf" hidden>
+                <h3>拖放 PDF / DOCX / PPTX 檔案至此，或點擊上傳</h3>
+                <p class="support-text">支援 PDF、DOCX、PPTX 格式</p>
+                <input type="file" id="fileInput" accept=".pdf,.docx,.pptx" hidden>
                 <div id="uploadErrorMessage" class="error-message" style="display: none; margin-top: 15px;"></div>
             </div>
 
