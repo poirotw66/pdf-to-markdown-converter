@@ -8,14 +8,42 @@
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>文件轉 Markdown</h1>
-            <p>上傳 PDF、DOCX 或 PPTX 文件，我們將其轉換為結構化的 Markdown 格式</p>
+            <div class="hero-shell">
+                <div class="hero-copy">
+                    <span class="hero-kicker">AI 文件結構化引擎</span>
+                    <h1>文件轉 Markdown</h1>
+                    <p>上傳 PDF、DOCX 或 PPTX 文件，快速轉成適合 AI 理解、檢索與分析的結構化 Markdown。</p>
+                    <div class="hero-badges">
+                        <span class="hero-badge">PyMuPDF 快速路徑</span>
+                        <span class="hero-badge">Gemini Vision</span>
+                        <span class="hero-badge">Flash 預設模型</span>
+                    </div>
+                </div>
+                <div class="hero-panel">
+                    <div class="hero-panel-label">工作流</div>
+                    <div class="hero-metrics">
+                        <div class="hero-metric">
+                            <strong>01</strong>
+                            <span>上傳文件</span>
+                        </div>
+                        <div class="hero-metric">
+                            <strong>02</strong>
+                            <span>模型解析</span>
+                        </div>
+                        <div class="hero-metric">
+                            <strong>03</strong>
+                            <span>輸出 Markdown</span>
+                        </div>
+                    </div>
+                    <p class="hero-panel-text">適合 RAG 建庫、投影片理解、表格擷取與文件內容結構化。</p>
+                </div>
+            </div>
         </header>
 
         <main>
@@ -91,8 +119,14 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                 </div>
+                <div class="upload-badges" aria-hidden="true">
+                    <span>PDF</span>
+                    <span>DOCX</span>
+                    <span>PPTX</span>
+                </div>
                 <h3>拖放 PDF / DOCX / PPTX 檔案至此，或點擊上傳</h3>
                 <p class="support-text">支援 PDF、DOCX、PPTX 格式</p>
+                <p class="upload-hint">預設使用 Gemini Flash。需要更穩定的複雜版面理解時，可改選 Gemini Pro。</p>
                 <input type="file" id="fileInput" accept=".pdf,.docx,.pptx" hidden>
                 <div id="uploadErrorMessage" class="error-message" style="display: none; margin-top: 15px;"></div>
             </div>
@@ -104,21 +138,23 @@
                         <span class="file-name" id="fileName">filename.pdf</span>
                         <span class="file-status" id="fileStatus">準備就緒</span>
                     </div>
-                    <div class="prompt-selector">
-                        <label for="promptTemplate" class="prompt-label">提示樣板</label>
-                        <select id="promptTemplate" class="input-select">
-                            <option value="slide" selected>簡報/一般</option>
-                            <option value="table">表格強化</option>
-                            <option value="ocr">純 OCR</option>
-                            <option value="custom">自訂</option>
-                        </select>
-                    </div>
-                    <div class="prompt-selector">
-                        <label for="modelSelect" class="prompt-label">Gemini 模型</label>
-                        <select id="modelSelect" class="input-select">
-                            <option value="gemini-pro-latest">gemini-pro-latest</option>
-                            <option value="gemini-flash-latest" selected>gemini-flash-latest</option>
-                        </select>
+                    <div class="control-cluster">
+                        <div class="prompt-selector">
+                            <label for="promptTemplate" class="prompt-label">提示樣板</label>
+                            <select id="promptTemplate" class="input-select">
+                                <option value="slide" selected>簡報/一般</option>
+                                <option value="table">表格強化</option>
+                                <option value="ocr">純 OCR</option>
+                                <option value="custom">自訂</option>
+                            </select>
+                        </div>
+                        <div class="prompt-selector">
+                            <label for="modelSelect" class="prompt-label">Gemini 模型</label>
+                            <select id="modelSelect" class="input-select">
+                                <option value="gemini-pro-latest">gemini-pro-latest</option>
+                                <option value="gemini-flash-latest" selected>gemini-flash-latest</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="action-buttons">
                         <button id="convertBtn" class="btn primary-btn" style="display: inline-block;">開始轉換</button>
@@ -146,7 +182,10 @@
             <!-- 左右分欄預覽區域 -->
             <div class="preview-container" id="previewContainer" style="display: none;">
                 <div class="preview-header">
-                    <h2>轉換完成</h2>
+                    <div class="preview-title-block">
+                        <span class="preview-kicker">Ready</span>
+                        <h2>轉換完成</h2>
+                    </div>
                     <div class="preview-actions">
                         <button id="downloadBtnPreview" class="btn success-btn">下載 Markdown</button>
                         <button id="resetBtnPreview" class="btn secondary-btn">轉換其他檔案</button>
