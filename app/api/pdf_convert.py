@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from src.utils.pdf_parser import PDFParser
 from src.utils.md_exporter import MDExporter
 from src.utils.logging_config import get_logger
-from app.config import settings
+from app.config import settings, resolve_gemini_model
 from app.metrics import service_metrics
 
 log = get_logger(__name__)
@@ -159,6 +159,7 @@ async def convert_pdf(
     file: UploadFile = File(...),
     prompt_template: str | None = Form(None),
     api_key: str | None = Form(None),
+    model: str | None = Form(None),
 ):
     """
     Convert uploaded PDF/DOCX/PPTX to Markdown.
@@ -167,6 +168,7 @@ async def convert_pdf(
         file: PDF, DOCX, or PPTX file to convert
         prompt_template: Prompt template ID or custom prompt string
         api_key: Google Gemini API key (required if not set in environment)
+        model: Optional Gemini model override (`gemini-pro-latest` or `gemini-flash-latest`)
     """
     service_metrics.increment("conversion_requests_total")
 
@@ -197,6 +199,12 @@ async def convert_pdf(
             ),
         )
 
+    try:
+        selected_model = resolve_gemini_model(model)
+    except ValueError as exc:
+        service_metrics.increment("conversion_rejected_total")
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     temp_dir = Path(tempfile.mkdtemp())
     safe_filename = _build_safe_filename(file.filename)
     temp_input_path = temp_dir / safe_filename
@@ -219,7 +227,11 @@ async def convert_pdf(
         log.info(f"Processing document: {file.filename}")
 
         # Initialize parser and exporter with API key
-        parser = PDFParser(prompt_template=prompt_template, api_key=api_key_to_use)
+        parser = PDFParser(
+            prompt_template=prompt_template,
+            api_key=api_key_to_use,
+            gemini_model=selected_model,
+        )
         md_output_dir = temp_dir / "md_output"
         exporter = MDExporter(output_dir=str(md_output_dir))
 

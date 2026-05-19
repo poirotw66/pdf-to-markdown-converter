@@ -4,7 +4,8 @@
 
 ```
 GOOGLE_API_KEY=your-google-api-key-here
-GEMINI_MODEL=gemini-pro-latest
+GEMINI_MODEL=gemini-flash-latest
+# Supported values: gemini-pro-latest, gemini-flash-latest
 
 # PDF Processing
 # Density = chars / (page width * height in PDF points). Used only if PDF_GEMINI_ON_LOW_TEXT_DENSITY=true.

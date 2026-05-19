@@ -1,6 +1,12 @@
 """Configuration for PDF to Markdown Converter (standalone)."""
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
+SUPPORTED_GEMINI_MODELS = (
+    "gemini-pro-latest",
+    "gemini-flash-latest",
+)
+
 
 class Settings(BaseSettings):
     """Application settings."""
@@ -16,7 +22,7 @@ class Settings(BaseSettings):
     google_api_key: str = ""
 
     # Model Configuration
-    gemini_model: str = "gemini-pro-latest"
+    gemini_model: str = DEFAULT_GEMINI_MODEL
 
     # PDF Processing
     # chars / (page width * height in PDF points). Old default 0.02 required ~10k chars on A4
@@ -71,3 +77,14 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def resolve_gemini_model(selected_model: str | None) -> str:
+    """Return a validated Gemini model name, falling back to configured default."""
+    requested = (selected_model or "").strip().lower()
+    configured = (settings.gemini_model or "").strip().lower()
+    candidate = requested or configured or DEFAULT_GEMINI_MODEL
+    if candidate not in SUPPORTED_GEMINI_MODELS:
+        allowed = ", ".join(SUPPORTED_GEMINI_MODELS)
+        raise ValueError(f"Unsupported Gemini model: {candidate}. Allowed values: {allowed}")
+    return candidate

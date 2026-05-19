@@ -19,7 +19,7 @@ except ImportError:
     import google.generativeai as genai  # type: ignore
     genai_types = None
     USE_GOOGLE_GENAI_SDK = False
-from app.config import settings
+from app.config import settings, resolve_gemini_model
 from src.utils.pdf_cache import PDFCache
 from src.utils.retry import (
     retry_with_backoff, classify_error, CircuitBreaker
@@ -174,6 +174,7 @@ class PDFParser:
         text_density_threshold: float = None,
         prompt_template: Optional[str] = None,
         api_key: Optional[str] = None,
+        gemini_model: Optional[str] = None,
     ):
         """
         Initialize the PDF parser.
@@ -186,11 +187,13 @@ class PDFParser:
             prompt_template: Prompt template ID ("slide", "table", "ocr") or custom prompt string.
                             If None, uses default template.
             api_key: Google Gemini API key. If provided, will use this instead of settings.
+            gemini_model: Optional Gemini model override for this parser instance.
         """
         # Use provided API key or fall back to settings
         api_key_to_use = api_key if api_key and api_key.strip() else settings.google_api_key
         if not api_key_to_use or not api_key_to_use.strip():
             raise ValueError("Google Gemini API key is required. Please provide api_key parameter or set GOOGLE_API_KEY in environment.")
+        self.gemini_model = resolve_gemini_model(gemini_model)
         
         if USE_GOOGLE_GENAI_SDK:
             self.client = genai.Client(api_key=api_key_to_use.strip())
@@ -198,7 +201,7 @@ class PDFParser:
         else:
             genai.configure(api_key=api_key_to_use.strip())
             self.client = None
-            self.model = genai.GenerativeModel(settings.gemini_model)
+            self.model = genai.GenerativeModel(self.gemini_model)
         
         # Thread pool for Gemini API calls (with rate limiting)
         self.max_workers = max_workers or settings.pdf_max_workers
@@ -379,7 +382,7 @@ class PDFParser:
                             mime_type="image/png",
                         )
                         return self.client.models.generate_content(
-                            model=settings.gemini_model,
+                            model=self.gemini_model,
                             contents=[prompt, image_part],
                             config=genai_types.GenerateContentConfig(**generate_config),
                         )

@@ -111,8 +111,10 @@ sudo apt-get install libreoffice
 
 ```env
 GOOGLE_API_KEY=your-google-api-key
-GEMINI_MODEL=gemini-pro-latest
+GEMINI_MODEL=gemini-flash-latest
 ```
+
+`GEMINI_MODEL` 目前支援：`gemini-pro-latest`、`gemini-flash-latest`。
 
 ### 可選配置
 
@@ -187,6 +189,17 @@ curl -X POST "http://localhost:8000/api/v1/convert-pdf" \
 curl -X POST "http://localhost:8000/api/v1/convert-pdf" \
   -F "file=@document.pdf" \
   -F "prompt_template=你的自訂 prompt 內容"
+
+# 指定 Gemini 模型
+curl -X POST "http://localhost:8000/api/v1/convert-pdf" \
+   -F "file=@document.pdf" \
+   -F "model=gemini-flash-latest"
+```
+
+### 批次腳本
+
+```bash
+python scripts/test_docx_convert.py --batch-dir test --recursive --workers 4 --model gemini-flash-latest
 ```
 
 ### Prompt 樣板選項

@@ -12,9 +12,18 @@ from app.metrics import service_metrics
 class FakeParserSuccess:
     """Fake parser that returns deterministic output."""
 
-    def __init__(self, prompt_template: str | None = None, api_key: str | None = None) -> None:
+    last_instance: "FakeParserSuccess | None" = None
+
+    def __init__(
+        self,
+        prompt_template: str | None = None,
+        api_key: str | None = None,
+        gemini_model: str | None = None,
+    ) -> None:
         self.prompt_template = prompt_template
         self.api_key = api_key
+        self.gemini_model = gemini_model
+        FakeParserSuccess.last_instance = self
 
     def parse_pdf(self, pdf_path: str, prompt_template: str | None = None) -> list[dict]:
         _ = (pdf_path, prompt_template)
@@ -24,9 +33,15 @@ class FakeParserSuccess:
 class FakeParserFailure:
     """Fake parser that raises a controlled exception."""
 
-    def __init__(self, prompt_template: str | None = None, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        prompt_template: str | None = None,
+        api_key: str | None = None,
+        gemini_model: str | None = None,
+    ) -> None:
         self.prompt_template = prompt_template
         self.api_key = api_key
+        self.gemini_model = gemini_model
 
     def parse_pdf(self, pdf_path: str, prompt_template: str | None = None) -> list[dict]:
         raise RuntimeError("boom secret")
@@ -61,6 +76,7 @@ def _mock_office_to_pdf(source_path: Path, temp_dir: Path) -> Path:
 @pytest.mark.anyio
 async def test_convert_pdf_success(monkeypatch) -> None:
     service_metrics.reset()
+    FakeParserSuccess.last_instance = None
     monkeypatch.setattr("app.api.pdf_convert.PDFParser", FakeParserSuccess)
     monkeypatch.setattr("app.api.pdf_convert.MDExporter", FakeExporter)
     monkeypatch.setattr(settings, "google_api_key", "test-key")
@@ -76,9 +92,49 @@ async def test_convert_pdf_success(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.text.startswith("# converted")
     assert response.headers["content-type"].startswith("text/markdown")
+    assert FakeParserSuccess.last_instance is not None
+    assert FakeParserSuccess.last_instance.gemini_model == settings.gemini_model
     assert metrics["conversion_requests_total"] == 1
     assert metrics["conversion_success_total"] == 1
     assert metrics["conversion_failure_total"] == 0
+
+
+@pytest.mark.anyio
+async def test_convert_pdf_accepts_explicit_flash_model(monkeypatch) -> None:
+    service_metrics.reset()
+    FakeParserSuccess.last_instance = None
+    monkeypatch.setattr("app.api.pdf_convert.PDFParser", FakeParserSuccess)
+    monkeypatch.setattr("app.api.pdf_convert.MDExporter", FakeExporter)
+    monkeypatch.setattr(settings, "google_api_key", "test-key")
+    monkeypatch.setattr(settings, "pdf_max_upload_size_mb", 5)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/convert-pdf",
+            data={"model": "gemini-flash-latest"},
+            files={"file": ("sample.pdf", _make_pdf_bytes(), "application/pdf")},
+        )
+
+    assert response.status_code == 200
+    assert FakeParserSuccess.last_instance is not None
+    assert FakeParserSuccess.last_instance.gemini_model == "gemini-flash-latest"
+
+
+@pytest.mark.anyio
+async def test_convert_pdf_rejects_unsupported_model(monkeypatch) -> None:
+    service_metrics.reset()
+    monkeypatch.setattr(settings, "google_api_key", "test-key")
+    monkeypatch.setattr(settings, "pdf_max_upload_size_mb", 5)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/convert-pdf",
+            data={"model": "gemini-ultra-latest"},
+            files={"file": ("sample.pdf", _make_pdf_bytes(), "application/pdf")},
+        )
+
+    assert response.status_code == 400
+    assert "Unsupported Gemini model" in response.json()["detail"]
 
 
 @pytest.mark.anyio

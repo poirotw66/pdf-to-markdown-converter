@@ -21,7 +21,7 @@ if str(_ROOT) not in sys.path:
 
 from httpx import ASGITransport, AsyncClient
 
-from app.config import settings
+from app.config import settings, SUPPORTED_GEMINI_MODELS
 from app.main import app
 
 SUPPORTED_EXTENSIONS = frozenset({".pdf", ".docx", ".pptx"})
@@ -68,6 +68,7 @@ def convert_one(
     timeout_seconds: float,
     preview_chars: int,
     quiet: bool,
+    gemini_model: str | None = None,
     force: bool = False,
 ) -> tuple[int, str]:
     """
@@ -96,6 +97,8 @@ def convert_one(
     key = (settings.google_api_key or "").strip()
     if key:
         form["api_key"] = key
+    if gemini_model:
+        form["model"] = gemini_model
 
     async def _post() -> object:
         async with AsyncClient(
@@ -140,6 +143,7 @@ def _batch_worker(
     output_dir: Path | None,
     timeout_seconds: float,
     quiet: bool,
+    gemini_model: str | None,
     force: bool,
 ) -> tuple[Path, int, str]:
     if output_dir is not None:
@@ -152,6 +156,7 @@ def _batch_worker(
         timeout_seconds,
         preview_chars=0,
         quiet=quiet,
+        gemini_model=gemini_model,
         force=force,
     )
     return doc_path, code, msg
@@ -164,6 +169,7 @@ def run_batch(
     timeout_seconds: float,
     recursive: bool,
     quiet: bool,
+    gemini_model: str | None,
     force: bool,
 ) -> int:
     files = collect_batch_files(directory, recursive=recursive)
@@ -186,6 +192,7 @@ def run_batch(
                 output_dir,
                 timeout_seconds,
                 quiet,
+                gemini_model,
                 force,
             ): path
             for path in files
@@ -282,6 +289,12 @@ def main() -> None:
         help="HTTP client timeout in seconds (default: 900)",
     )
     parser.add_argument(
+        "--model",
+        choices=SUPPORTED_GEMINI_MODELS,
+        default=None,
+        help="Optional Gemini model override for this run.",
+    )
+    parser.add_argument(
         "--no-preview",
         action="store_true",
         help="Single-file only: do not print a preview of the Markdown body",
@@ -325,6 +338,7 @@ def main() -> None:
                 timeout_seconds=args.timeout,
                 recursive=args.recursive,
                 quiet=args.quiet,
+                gemini_model=args.model,
                 force=args.force,
             )
         )
@@ -344,6 +358,7 @@ def main() -> None:
         args.timeout,
         preview_chars,
         quiet=False,
+        gemini_model=args.model,
         force=args.force,
     )
     if code == 0 and msg.startswith("skipped_existing"):

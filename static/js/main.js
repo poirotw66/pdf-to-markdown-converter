@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileName = document.getElementById('fileName');
     const fileStatus = document.getElementById('fileStatus');
     const promptTemplate = document.getElementById('promptTemplate');
+    const modelSelect = document.getElementById('modelSelect');
     const progressBar = document.getElementById('progressBar');
     const progressContainer = document.getElementById('progressContainer');
     const convertBtn = document.getElementById('convertBtn');
@@ -667,6 +668,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 模板選項：傳送模板 ID
                 formData.append('prompt_template', promptTemplate.value);
             }
+        }
+
+        if (modelSelect && modelSelect.value) {
+            formData.append('model', modelSelect.value);
         }
 
         try {
