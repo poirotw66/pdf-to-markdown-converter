@@ -26,8 +26,16 @@ from src.utils.retry import (
 )
 from src.utils.prompts import get_prompt, PROMPT_TEMPLATES
 from src.utils.logging_config import get_logger
+from src.utils.token_usage import extract_usage_from_response
 
 log = get_logger(__name__)
+
+_EMPTY_USAGE = {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "thoughts_tokens": 0,
+    "total_tokens": 0,
+}
 
 
 def routing_use_gemini_vision(
@@ -331,13 +339,14 @@ class PDFParser:
             has_visual_structure=has_visual_structure,
         )
 
-    def _extract_text_from_image(self, image_input, page_num: int) -> str:
+    def _extract_text_from_image(
+        self, image_input, page_num: int
+    ) -> Tuple[str, Dict[str, int]]:
         """
         Extract text from a single PDF page image using Gemini vision.
-        
-        Args:
-            image_input: PIL Image object or BytesIO containing image bytes
-            page_num: Page number for error reporting
+
+        Returns:
+            (extracted_text, usage_dict with input/output/thoughts/total tokens)
         """
         # Acquire semaphore for rate limiting
         with self.gemini_semaphore:
@@ -348,11 +357,11 @@ class PDFParser:
                 if time_since_last < self.gemini_request_interval:
                     time.sleep(self.gemini_request_interval - time_since_last)
                 self.gemini_last_request_time = time.time()
-            
+
             try:
                 # Use the prompt from instance variable (set during initialization or parse_pdf call)
                 prompt = self.prompt
-                
+
                 # Convert BytesIO to PIL Image if needed, or use directly
                 if isinstance(image_input, io.BytesIO):
                     # Load image from bytes
@@ -391,7 +400,7 @@ class PDFParser:
                         [prompt, image],
                         generation_config=generate_config,
                     )
-                
+
                 # Use Gemini to extract text from image with retry and circuit breaker
                 if settings.pdf_retry_enabled:
                     @retry_with_backoff(
@@ -407,7 +416,7 @@ class PDFParser:
                                 _call_gemini_model,
                             )
                         return _call_gemini_model()
-                    
+
                     try:
                         response = _generate_with_retry()
                     except Exception as e:
@@ -422,15 +431,18 @@ class PDFParser:
                         )
                         # Graceful degradation: return error message
                         if settings.pdf_graceful_degradation_enabled:
-                            return f"[無法從第 {page_num} 頁提取文字: {error_type.value}]"
+                            return (
+                                f"[無法從第 {page_num} 頁提取文字: {error_type.value}]",
+                                dict(_EMPTY_USAGE),
+                            )
                         raise
                 else:
                     response = _call_gemini_model()
-                
+
                 extracted_text = getattr(response, "text", "") or ""
                 extracted_text = extracted_text.strip()
-                return extracted_text
-                
+                return extracted_text, extract_usage_from_response(response)
+
             except Exception as e:
                 error_type = classify_error(e)
                 log.error(
@@ -438,11 +450,13 @@ class PDFParser:
                     extra={"page_num": page_num, "error_type": error_type.value, "error": str(e)},
                     exc_info=True
                 )
-                # Graceful degradation
                 if settings.pdf_graceful_degradation_enabled:
-                    return f"[無法從第 {page_num} 頁提取文字: {error_type.value}]"
-                return f"[無法從第 {page_num} 頁提取文字: {str(e)}]"
-    
+                    return (
+                        f"[無法從第 {page_num} 頁提取文字: {error_type.value}]",
+                        dict(_EMPTY_USAGE),
+                    )
+                raise
+
     def parse_pdf(
         self,
         pdf_path: str,
@@ -505,7 +519,12 @@ class PDFParser:
             for page_num in range(1, total_pages + 1):
                 cached_page = self.cache.get_cached_page(pdf_path, page_num)
                 if cached_page:
-                    # Use cached page data
+                    # Use cached page data (no API cost for this conversion run)
+                    cached_page = dict(cached_page)
+                    cached_page["usage_from_cache"] = True
+                    cached_page["input_tokens"] = 0
+                    cached_page["output_tokens"] = 0
+                    cached_page["thoughts_tokens"] = 0
                     pages_data.append(cached_page)
                     print(f"  ✓ Page {page_num}: Loaded from cache ({cached_page.get('method', 'unknown')})")
                 else:
@@ -526,6 +545,11 @@ class PDFParser:
             if self.use_cache:
                 cached_page = self.cache.get_cached_page(pdf_path, page_num)
                 if cached_page:
+                    cached_page = dict(cached_page)
+                    cached_page["usage_from_cache"] = True
+                    cached_page["input_tokens"] = 0
+                    cached_page["output_tokens"] = 0
+                    cached_page["thoughts_tokens"] = 0
                     pages_data.append(cached_page)
                     continue
             
@@ -561,7 +585,11 @@ class PDFParser:
                     "page_number": page_num,
                     "text": text,
                     "total_pages": total_pages,
-                    "method": "pymupdf"
+                    "method": "pymupdf",
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "thoughts_tokens": 0,
+                    "usage_from_cache": False,
                 }
                 pages_data.append(page_data)
                 
@@ -577,6 +605,11 @@ class PDFParser:
                 if self.use_cache:
                     cached_page = self.cache.get_cached_page(pdf_path, page_num)
                     if cached_page and cached_page.get("method") == "gemini_vision":
+                        cached_page = dict(cached_page)
+                        cached_page["usage_from_cache"] = True
+                        cached_page["input_tokens"] = 0
+                        cached_page["output_tokens"] = 0
+                        cached_page["thoughts_tokens"] = 0
                         pages_data.append(cached_page)
                         print(f"  ✓ Page {page_num}: Gemini result loaded from cache")
                         continue
@@ -614,31 +647,39 @@ class PDFParser:
                             "page_number": page_num,
                             "text": fallback_text or "[無法轉換頁面為圖片]",
                             "total_pages": total_pages,
-                            "method": "gemini_vision_error_fallback_pymupdf" if fallback_text else "gemini_vision_error"
+                            "method": "gemini_vision_error_fallback_pymupdf" if fallback_text else "gemini_vision_error",
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "thoughts_tokens": 0,
+                            "usage_from_cache": False,
                         }
-                    
+
                     image = images_dict[page_num]
-                    
+
                     # Ensure image is in RGB mode and convert to bytes for Gemini API
                     if image.mode != 'RGB':
                         image = image.convert('RGB')
-                    
+
                     # Convert PIL Image to bytes to avoid PIL plugin issues in multiprocessing
                     img_bytes = io.BytesIO()
                     image.save(img_bytes, format='PNG')
                     img_bytes.seek(0)
-                    
-                    extracted_text = self._extract_text_from_image(img_bytes, page_num)
-                    
+
+                    extracted_text, usage = self._extract_text_from_image(img_bytes, page_num)
+
                     # 如果 Gemini 失敗且有 PyMuPDF 備援，改用備援文本
                     if extracted_text.startswith("[無法從第") and fallback_text:
                         extracted_text = fallback_text
-                    
+
                     page_data = {
                         "page_number": page_num,
                         "text": extracted_text,
                         "total_pages": total_pages,
-                        "method": "gemini_vision"
+                        "method": "gemini_vision",
+                        "input_tokens": usage.get("input_tokens", 0),
+                        "output_tokens": usage.get("output_tokens", 0),
+                        "thoughts_tokens": usage.get("thoughts_tokens", 0),
+                        "usage_from_cache": False,
                     }
                     
                     # Save to cache immediately after processing (with error handling)

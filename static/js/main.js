@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetBtn = document.getElementById('resetBtn');
     const resetBtnPreview = document.getElementById('resetBtnPreview');
     const downloadBtnPreview = document.getElementById('downloadBtnPreview');
+    const downloadUsageBtn = document.getElementById('downloadUsageBtn');
     const errorMessage = document.getElementById('errorMessage');
     const uploadErrorMessage = document.getElementById('uploadErrorMessage');
     const pdfPreview = document.getElementById('pdfPreview');
@@ -115,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let pdfPreviewUrl = null;
     let markdownContent = null;
     let promptPreviewExpanded = true;
+    let latestUsageLogName = null;
     const SUPPORTED_EXTENSIONS = ['.pdf', '.docx', '.pptx'];
 
     // Prompt 預覽相關函數
@@ -351,9 +353,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (progressBar) progressBar.style.width = '0%';
             if (progressContainer) progressContainer.style.display = 'none';
             
-            // 確保轉換按鈕可見且可用
+            // 確保轉換按鈕可見且可用（獨立操作列，不依賴 hover）
             if (convertBtn) {
-                convertBtn.style.display = 'inline-block';
+                convertBtn.style.display = 'inline-flex';
+                convertBtn.style.visibility = 'visible';
+                convertBtn.style.opacity = '1';
                 convertBtn.disabled = false;
                 convertBtn.textContent = '開始轉換';
                 console.log('✓ 轉換按鈕已顯示');
@@ -362,7 +366,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (downloadBtn) downloadBtn.style.display = 'none';
-            if (resetBtn) resetBtn.style.display = 'inline-block';
+            if (downloadUsageBtn) downloadUsageBtn.style.display = 'none';
+            latestUsageLogName = null;
+            if (resetBtn) resetBtn.style.display = 'inline-flex';
             if (errorMessage) errorMessage.style.display = 'none';
             
             // 更新 prompt 預覽
@@ -583,6 +589,11 @@ document.addEventListener('DOMContentLoaded', () => {
             URL.revokeObjectURL(downloadUrl);
             downloadUrl = null;
         }
+        latestUsageLogName = null;
+        if (downloadUsageBtn) {
+            downloadUsageBtn.style.display = 'none';
+            downloadUsageBtn.onclick = null;
+        }
         if (pdfPreviewUrl) {
             URL.revokeObjectURL(pdfPreviewUrl);
             pdfPreviewUrl = null;
@@ -606,10 +617,46 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (downloadBtn) {
             downloadBtn.onclick = downloadHandler;
+            downloadBtn.style.display = 'inline-flex';
         }
         if (downloadBtnPreview) {
             downloadBtnPreview.onclick = downloadHandler;
         }
+    }
+
+    function setupUsageDownloadButton(logName) {
+        latestUsageLogName = logName || null;
+        if (!downloadUsageBtn) {
+            return;
+        }
+        if (!latestUsageLogName) {
+            downloadUsageBtn.style.display = 'none';
+            downloadUsageBtn.onclick = null;
+            return;
+        }
+        downloadUsageBtn.style.display = 'inline-flex';
+        downloadUsageBtn.onclick = async () => {
+            try {
+                const usageResp = await fetch(
+                    `/api/v1/usage-logs/${encodeURIComponent(latestUsageLogName)}`
+                );
+                if (!usageResp.ok) {
+                    throw new Error('無法取得計費明細');
+                }
+                const usageBlob = await usageResp.blob();
+                const a = document.createElement('a');
+                const objectUrl = URL.createObjectURL(usageBlob);
+                a.href = objectUrl;
+                a.download = latestUsageLogName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(objectUrl);
+            } catch (error) {
+                console.error('下載計費明細失敗:', error);
+                showError(error.message || '下載計費明細失敗');
+            }
+        };
     }
 
     convertBtn.addEventListener('click', async () => {
@@ -688,7 +735,37 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const blob = await response.blob();
-            
+
+            const usageModel = response.headers.get('X-Usage-Model') || '';
+            const usageInput = response.headers.get('X-Usage-Input-Tokens') || '0';
+            const usageOutput = response.headers.get('X-Usage-Output-Tokens') || '0';
+            const usageThoughts = response.headers.get('X-Usage-Thoughts-Tokens') || '0';
+            const usageCost = response.headers.get('X-Usage-Estimated-Cost-Usd') || '0';
+            const usageLogPath = response.headers.get('X-Usage-Log-Path') || '';
+            const usageLogName = response.headers.get('X-Usage-Log-Name') || '';
+            const usageSummaryEl = document.getElementById('usageSummary');
+            if (usageSummaryEl) {
+                usageSummaryEl.style.display = 'block';
+                usageSummaryEl.textContent =
+                    `Token：input ${usageInput} / output ${usageOutput}` +
+                    (usageThoughts && usageThoughts !== '0' ? ` / thoughts ${usageThoughts}` : '') +
+                    ` · 估算費用 USD ${usageCost}` +
+                    (usageModel ? ` · ${usageModel}` : '');
+                if (usageLogPath || usageLogName) {
+                    usageSummaryEl.title = `用量明細：${usageLogName || usageLogPath}`;
+                }
+            }
+            setupUsageDownloadButton(usageLogName);
+            console.log('[usage]', {
+                model: usageModel,
+                input_tokens: usageInput,
+                output_tokens: usageOutput,
+                thoughts_tokens: usageThoughts,
+                estimated_cost_usd: usageCost,
+                log_name: usageLogName,
+                log_path: usageLogPath,
+            });
+
             // 讀取 Markdown 內容
             const text = await blob.text();
             markdownContent = text;

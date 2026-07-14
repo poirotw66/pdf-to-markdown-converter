@@ -122,6 +122,15 @@ def convert_one(
         if not quiet:
             with _print_lock:
                 print(f"[{doc_path.name}] saved_markdown {output_path.resolve()} chars={len(text)}")
+                print(
+                    f"[{doc_path.name}] usage "
+                    f"model={response.headers.get('x-usage-model', '')} "
+                    f"input={response.headers.get('x-usage-input-tokens', '0')} "
+                    f"output={response.headers.get('x-usage-output-tokens', '0')} "
+                    f"thoughts={response.headers.get('x-usage-thoughts-tokens', '0')} "
+                    f"est_usd={response.headers.get('x-usage-estimated-cost-usd', '0')} "
+                    f"log={response.headers.get('x-usage-log-path', '')}"
+                )
                 if preview_chars > 0:
                     print(f"[{doc_path.name}] --- preview ---")
                     print(text[:preview_chars])

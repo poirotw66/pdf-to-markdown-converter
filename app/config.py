@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     # Cache Configuration
     pdf_cache_enabled: bool = True
     pdf_cache_dir: str = "./data/pdf_cache"
+    # Per-conversion token usage JSON (totals + per-page). Still covered by data/ in .gitignore.
+    pdf_usage_log_dir: str = "./data/usage_logs"
 
     # Logging Configuration
     log_level: str = "INFO"

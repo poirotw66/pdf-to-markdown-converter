@@ -12,6 +12,12 @@ from src.utils.md_exporter import MDExporter
 from src.utils.logging_config import get_logger
 from app.config import settings, resolve_gemini_model
 from app.metrics import service_metrics
+from src.utils.token_usage import (
+    build_usage_report,
+    resolve_usage_log_file,
+    usage_response_headers,
+    write_usage_log,
+)
 
 log = get_logger(__name__)
 
@@ -153,6 +159,22 @@ def cleanup_temp_dir(path: Path):
         log.error(f"Error cleaning up temporary directory {path}: {e}")
 
 
+@router.get("/usage-logs/{log_name}")
+async def download_usage_log(log_name: str):
+    """Download a detailed token usage JSON written during conversion."""
+    try:
+        path = resolve_usage_log_file(settings.pdf_usage_log_dir, log_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Usage log not found") from exc
+    return FileResponse(
+        path=path,
+        filename=path.name,
+        media_type="application/json",
+    )
+
+
 @router.post("/convert-pdf")
 async def convert_pdf(
     background_tasks: BackgroundTasks,
@@ -241,8 +263,42 @@ async def convert_pdf(
         if not pages_data:
             raise HTTPException(status_code=400, detail="Could not extract text from PDF")
 
+        usage_report = build_usage_report(
+            model=selected_model,
+            source_filename=file.filename or safe_filename,
+            pages_data=pages_data,
+        )
+        usage_log_path = None
+        try:
+            usage_log_path = write_usage_log(
+                usage_report,
+                settings.pdf_usage_log_dir,
+            )
+            log.info(
+                "Wrote token usage log",
+                extra={
+                    "path": str(usage_log_path),
+                    "input_tokens": usage_report.input_tokens,
+                    "output_tokens": usage_report.output_tokens,
+                    "estimated_cost_usd": usage_report.estimated_cost_usd,
+                },
+            )
+        except Exception:
+            log.warning("Failed to write token usage log", exc_info=True)
+
         # Export summary (single MD file)
-        summary_path = exporter.export_summary(temp_pdf_path, pages_data, file.filename)
+        summary_path = exporter.export_summary(
+            temp_pdf_path,
+            pages_data,
+            file.filename,
+            usage_summary={
+                "model": usage_report.model,
+                "input_tokens": usage_report.input_tokens,
+                "output_tokens": usage_report.output_tokens,
+                "thoughts_tokens": usage_report.thoughts_tokens,
+                "estimated_cost_usd": usage_report.estimated_cost_usd,
+            },
+        )
 
         if not summary_path or not summary_path.exists():
             raise HTTPException(status_code=500, detail="Failed to generate Markdown file")
@@ -255,6 +311,7 @@ async def convert_pdf(
             path=summary_path,
             filename=f"{Path(file.filename).stem}.md",
             media_type="text/markdown",
+            headers=usage_response_headers(usage_report, usage_log_path),
         )
 
     except HTTPException:

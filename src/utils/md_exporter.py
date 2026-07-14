@@ -108,42 +108,60 @@ class MDExporter:
         self,
         pdf_path: Path,
         pages_data: List[Dict[str, Any]],
-        filename: str = None
+        filename: str = None,
+        usage_summary: Dict[str, Any] | None = None,
     ) -> Path:
         """
         Export a summary MD file with all pages combined.
-        
+
         Args:
             pdf_path: Path to PDF file
             pages_data: List of page data dictionaries
             filename: Optional custom filename
-            
+            usage_summary: Optional token/cost totals for the markdown header
+
         Returns:
             Path to the summary MD file
         """
         if not pages_data:
             return None
-        
+
         # Get PDF filename without extension
         if filename:
             pdf_name = Path(filename).stem
         else:
             pdf_name = pdf_path.stem
-        
+
         # Create subdirectory for this PDF
         pdf_md_dir = self.output_dir / pdf_name
         pdf_md_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Create summary file
         summary_file = pdf_md_dir / "summary.md"
-        
+
+        usage_block = ""
+        if usage_summary:
+            model = usage_summary.get("model", "N/A")
+            input_tokens = usage_summary.get("input_tokens", 0)
+            output_tokens = usage_summary.get("output_tokens", 0)
+            thoughts_tokens = usage_summary.get("thoughts_tokens", 0)
+            cost = usage_summary.get("estimated_cost_usd", 0.0)
+            usage_block = (
+                f"**Model:** {model}  \n"
+                f"**Input Tokens:** {input_tokens}  \n"
+                f"**Output Tokens:** {output_tokens}  \n"
+                f"**Thoughts Tokens:** {thoughts_tokens}  \n"
+                f"**Estimated Cost (USD):** {float(cost):.6f}  \n"
+                f"**Cost Note:** estimate from public API rates, not an invoice\n"
+            )
+
         # Prepare summary content
         summary_content = f"""# {pdf_name}
 
 **Source:** {pdf_path.name}  
 **Total Pages:** {len(pages_data)}  
 **Extraction Date:** {_extraction_timestamp_iso(pages_data)}
-
+{usage_block}
 ---
 
 """

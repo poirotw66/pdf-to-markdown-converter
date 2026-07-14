@@ -238,6 +238,7 @@ python scripts/test_docx_convert.py --batch-dir test --recursive --workers 4 --m
 * ✅ 多進程圖片轉換 + 多線程 API 調用
 * ✅ 速率限制保護
 * ✅ 結構化日誌記錄
+* ✅ 每次轉換記錄 Gemini token（input／output）與估算 USD（Markdown 標頭 + `data/usage_logs/`）
 
 ## 使用場景
 

@@ -53,8 +53,8 @@ class FakeExporter:
     def __init__(self, output_dir: str) -> None:
         self.output_dir = Path(output_dir)
 
-    def export_summary(self, temp_pdf_path: Path, pages_data: list[dict], original_name: str) -> Path:
-        _ = (temp_pdf_path, pages_data, original_name)
+    def export_summary(self, temp_pdf_path: Path, pages_data: list[dict], original_name: str, usage_summary: dict | None = None) -> Path:
+        _ = (temp_pdf_path, pages_data, original_name, usage_summary)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         output_file = self.output_dir / "result.md"
         output_file.write_text("# converted\n", encoding="utf-8")
@@ -92,11 +92,25 @@ async def test_convert_pdf_success(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.text.startswith("# converted")
     assert response.headers["content-type"].startswith("text/markdown")
+    assert response.headers.get("x-usage-model") == settings.gemini_model
+    assert response.headers.get("x-usage-input-tokens") == "0"
+    assert response.headers.get("x-usage-estimated-cost-usd") is not None
+    usage_log_name = response.headers.get("x-usage-log-name")
+    assert usage_log_name
     assert FakeParserSuccess.last_instance is not None
     assert FakeParserSuccess.last_instance.gemini_model == settings.gemini_model
     assert metrics["conversion_requests_total"] == 1
     assert metrics["conversion_success_total"] == 1
     assert metrics["conversion_failure_total"] == 0
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        usage_response = await client.get(f"/api/v1/usage-logs/{usage_log_name}")
+        bad_response = await client.get("/api/v1/usage-logs/not_a_valid_usage_log.json")
+
+    assert usage_response.status_code == 200
+    assert usage_response.headers["content-type"].startswith("application/json")
+    assert "estimated_cost_usd" in usage_response.text
+    assert bad_response.status_code == 400
 
 
 @pytest.mark.anyio

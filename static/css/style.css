@@ -1,5 +1,6 @@
 :root {
     font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --primary-color: #0f6c5b;
     --primary-hover: #0a5649;
     --primary-light: #d7f3ea;
     --secondary-accent: #ffb84d;
@@ -742,7 +743,9 @@ main {
     border-radius: 24px;
     border: 1px solid rgba(255, 255, 255, 0.72);
     box-shadow: var(--shadow-md);
-    animation: fadeInUp 0.6s ease-out 0.3s both;
+    /* No delayed fade-in: buttons must be visible immediately after file select. */
+    opacity: 1;
+    visibility: visible;
     transition: box-shadow 0.3s ease;
 }
 
@@ -850,6 +853,29 @@ main {
     justify-content: flex-end;
 }
 
+.convert-action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-start;
+    margin: 0 0 20px;
+    padding: 16px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(15, 108, 91, 0.08) 0%, rgba(255, 184, 77, 0.1) 100%);
+    border: 1px solid rgba(15, 108, 91, 0.14);
+}
+
+.convert-btn {
+    min-width: 160px;
+    min-height: 48px;
+    font-size: 1rem;
+    opacity: 1 !important;
+    visibility: visible !important;
+    color: #fff !important;
+    z-index: 2;
+}
+
 .btn {
     padding: 12px 24px;
     border-radius: 14px;
@@ -857,29 +883,15 @@ main {
     font-size: 0.9375rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, background 0.2s ease;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     letter-spacing: -0.01em;
     box-shadow: var(--shadow-sm);
 }
 
 .btn::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s, height 0.6s;
-}
-
-.btn:hover::before {
-    width: 300px;
-    height: 300px;
+    display: none;
 }
 
 .btn:active {
@@ -887,13 +899,15 @@ main {
 }
 
 .primary-btn {
-    background: linear-gradient(135deg, var(--primary-color) 0%, #127260 100%);
-    color: white;
+    /* Fallback hex if CSS variables ever regress again. */
+    background: linear-gradient(135deg, #0f6c5b 0%, #127260 100%);
+    background: linear-gradient(135deg, var(--primary-color, #0f6c5b) 0%, #127260 100%);
+    color: #fff;
     box-shadow: var(--shadow-md);
 }
 
 .primary-btn:hover {
-    background: linear-gradient(135deg, var(--primary-hover) 0%, #0d6657 100%);
+    background: linear-gradient(135deg, var(--primary-hover, #0a5649) 0%, #0d6657 100%);
     box-shadow: var(--shadow-lg);
     transform: translateY(-2px);
 }
@@ -1251,7 +1265,14 @@ footer {
 
 .preview-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
+    justify-content: flex-end;
+}
+
+.usage-summary {
+    max-width: 42rem;
+    line-height: 1.5;
 }
 
 .preview-split {
@@ -1651,6 +1672,15 @@ footer {
     }
     
     .action-buttons .btn {
+        width: 100%;
+    }
+
+    .convert-action-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .convert-action-bar .btn {
         width: 100%;
     }
     

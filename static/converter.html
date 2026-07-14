@@ -133,7 +133,7 @@
 
             <!-- 預覽和轉換區域 -->
             <div class="preview-conversion-area" id="previewConversionArea" style="display: none;">
-                <div class="file-controls">
+                    <div class="file-controls">
                     <div class="file-info">
                         <span class="file-name" id="fileName">filename.pdf</span>
                         <span class="file-status" id="fileStatus">準備就緒</span>
@@ -156,11 +156,11 @@
                             </select>
                         </div>
                     </div>
-                    <div class="action-buttons">
-                        <button id="convertBtn" class="btn primary-btn" style="display: inline-block;">開始轉換</button>
-                        <button id="downloadBtn" class="btn success-btn" style="display: none;">下載 Markdown</button>
-                        <button id="resetBtn" class="btn secondary-btn" style="display: inline-block;">重新選擇</button>
-                    </div>
+                </div>
+                <div class="convert-action-bar">
+                    <button id="convertBtn" class="btn primary-btn convert-btn" type="button">開始轉換</button>
+                    <button id="downloadBtn" class="btn success-btn" type="button" style="display: none;">下載 Markdown</button>
+                    <button id="resetBtn" class="btn secondary-btn" type="button">重新選擇</button>
                 </div>
                 <div class="prompt-custom-section" id="promptCustomSection" style="display: none;">
                     <label for="customPrompt" class="prompt-label">自訂 Prompt</label>
@@ -185,10 +185,12 @@
                     <div class="preview-title-block">
                         <span class="preview-kicker">Ready</span>
                         <h2>轉換完成</h2>
+                        <p id="usageSummary" class="usage-summary" style="display: none; margin: 8px 0 0; font-size: 0.9rem; color: #4b5563;"></p>
                     </div>
                     <div class="preview-actions">
-                        <button id="downloadBtnPreview" class="btn success-btn">下載 Markdown</button>
-                        <button id="resetBtnPreview" class="btn secondary-btn">轉換其他檔案</button>
+                        <button id="downloadBtnPreview" class="btn success-btn" type="button">下載 Markdown</button>
+                        <button id="downloadUsageBtn" class="btn secondary-btn" type="button" style="display: none;">下載計費明細</button>
+                        <button id="resetBtnPreview" class="btn secondary-btn" type="button">轉換其他檔案</button>
                     </div>
                 </div>
                 <div class="preview-split">

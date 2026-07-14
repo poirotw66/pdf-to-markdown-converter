@@ -43,6 +43,8 @@ OFFICE_INTERMEDIATE_PDF_SAVE_DIR=
 # Cache
 PDF_CACHE_ENABLED=true
 PDF_CACHE_DIR=./data/pdf_cache
+# Token usage JSON logs (totals + per-page); estimate USD from public Gemini rates
+PDF_USAGE_LOG_DIR=./data/usage_logs
 
 # Logging
 LOG_LEVEL=INFO
