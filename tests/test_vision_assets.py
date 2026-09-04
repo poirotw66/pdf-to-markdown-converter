@@ -32,6 +32,39 @@ def test_visual_evidence_markdown_embeds_relative_asset() -> None:
     assert "- **資產**：assets/p05.png" in block
 
 
+def test_export_reuses_cached_raster_without_pdf2image(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from PIL import Image
+
+    from src.utils import vision_assets as va
+
+    calls: list[tuple] = []
+
+    def boom(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("pdf2image should not be called when reusable")
+
+    monkeypatch.setattr(va, "convert_from_path", boom)
+
+    source = tmp_path / "cached_p02.png"
+    Image.new("RGB", (12, 8), color=(1, 2, 3)).save(source, format="PNG")
+    assets_dir = tmp_path / "assets"
+
+    exported = va.export_vision_assets(
+        tmp_path / "unused.pdf",
+        [2],
+        assets_dir,
+        total_pages=2,
+        reusable_sources={2: source},
+    )
+    assert len(exported) == 1
+    assert exported[0].reused is True
+    assert exported[0].absolute_path.is_file()
+    assert calls == []
+
+
 def test_export_summary_embeds_and_zips_when_assets(
     tmp_path: Path,
     monkeypatch,
@@ -43,7 +76,7 @@ def test_export_summary_embeds_and_zips_when_assets(
     pdf_path = tmp_path / "demo.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n%%EOF\n")
 
-    def fake_export(pdf_path, page_numbers, assets_dir, *, total_pages, dpi=150):
+    def fake_export(pdf_path, page_numbers, assets_dir, *, total_pages, dpi=150, reusable_sources=None):
         from src.utils.vision_assets import ExportedVisionAsset
 
         assets_dir = Path(assets_dir)
@@ -60,6 +93,7 @@ def test_export_summary_embeds_and_zips_when_assets(
                     absolute_path=target,
                     width=8,
                     height=8,
+                    reused=bool(reusable_sources and page in reusable_sources),
                 )
             )
         return written
@@ -81,6 +115,7 @@ def test_export_summary_embeds_and_zips_when_assets(
                 "text": "視覺頁內容",
                 "method": "gemini_vision",
                 "total_pages": 2,
+                "vision_asset_path": str(tmp_path / "preexisting.png"),
             },
         ],
         filename="示範簡報.pdf",
@@ -100,7 +135,7 @@ def test_export_summary_embeds_and_zips_when_assets(
     assert "#### Visual Evidence" in md_text
     assert "文字頁" in md_text
     # Text-only page should not get an empty evidence block
-    assert "第 1 頁" not in md_text or "assets/p01.png" not in md_text
+    assert "assets/p01.png" not in md_text
 
 
 def test_export_summary_stays_markdown_without_vision_pages(tmp_path: Path) -> None:

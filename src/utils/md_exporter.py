@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from src.utils.vision_assets import (
     ASSETS_DIR_NAME,
     export_vision_assets,
+    reusable_sources_from_pages,
     vision_page_numbers,
     visual_evidence_markdown,
 )
@@ -163,19 +164,24 @@ class MDExporter:
             )
             if vision_pages:
                 assets_dir = pdf_md_dir / ASSETS_DIR_NAME
+                reusable = reusable_sources_from_pages(pages_data)
                 exported = export_vision_assets(
                     pdf_path,
                     vision_pages,
                     assets_dir,
                     total_pages=total_pages or len(vision_pages),
                     dpi=vision_asset_dpi,
+                    reusable_sources=reusable,
                 )
                 assets_by_page = {
                     item.page_number: item.relative_path for item in exported
                 }
                 if exported:
+                    reused = sum(1 for item in exported if item.reused)
+                    rendered = len(exported) - reused
                     print(
                         f"  ✓ Exported {len(exported)} vision assets to {assets_dir}"
+                        f" (reused={reused}, rendered={rendered})"
                     )
 
         summary_file = pdf_md_dir / f"{pdf_name}.md"

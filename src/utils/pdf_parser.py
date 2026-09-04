@@ -156,16 +156,20 @@ def _convert_page_wrapper(args):
     """
     Wrapper function for process pool to convert PDF page to image.
     Must be at module level for pickle serialization.
-    
+
     Args:
-        args: Tuple of (pdf_path_str, page_num)
-        
+        args: Tuple of (pdf_path_str, page_num, dpi)
+
     Returns:
         Tuple of (page_num, image) or (page_num, None) on error
     """
-    pdf_path_str, page_num = args
+    if len(args) == 3:
+        pdf_path_str, page_num, dpi = args
+    else:
+        pdf_path_str, page_num = args
+        dpi = 150
     try:
-        image = _convert_pdf_page_to_image(pdf_path_str, page_num, dpi=150)
+        image = _convert_pdf_page_to_image(pdf_path_str, page_num, dpi=int(dpi))
         return page_num, image
     except Exception as e:
         print(f"    Error converting page {page_num} to image: {str(e)}")
@@ -238,6 +242,8 @@ class PDFParser:
         cache_dir = getattr(settings, 'pdf_cache_dir', None)
         self.cache = PDFCache(cache_dir=cache_dir)
         self.use_cache = settings.pdf_cache_enabled
+        self.preserve_vision_assets = settings.pdf_preserve_vision_assets
+        self.vision_asset_dpi = settings.pdf_vision_asset_dpi
         
         # Prompt template handling
         # If prompt_template is a template ID, use it; if it's a custom string, use it directly
@@ -535,6 +541,7 @@ class PDFParser:
         if not pages_to_process:
             print("All pages already cached! Returning cached results.")
             pages_data.sort(key=lambda x: x["page_number"])
+            self._ensure_vision_rasters(pdf_path, pages_data, total_pages)
             return pages_data
         
         print(f"\nStep 1: Fast text extraction with PyMuPDF ({len(pages_to_process)} pages to process)...")
@@ -626,7 +633,10 @@ class PDFParser:
                 # Note: _convert_page_wrapper must be at module level for pickle serialization
                 with ProcessPoolExecutor(max_workers=self.max_processes) as process_executor:
                     futures = {
-                        process_executor.submit(_convert_page_wrapper, (str(pdf_path), page_num)): page_num
+                        process_executor.submit(
+                            _convert_page_wrapper,
+                            (str(pdf_path), page_num, self.vision_asset_dpi),
+                        ): page_num
                         for page_num in pages_to_process_gemini
                     }
                     
@@ -660,9 +670,10 @@ class PDFParser:
                     if image.mode != 'RGB':
                         image = image.convert('RGB')
 
-                    # Convert PIL Image to bytes to avoid PIL plugin issues in multiprocessing
+                    # Convert PIL Image to bytes once: reuse for Gemini + asset cache
                     img_bytes = io.BytesIO()
                     image.save(img_bytes, format='PNG')
+                    png_bytes = img_bytes.getvalue()
                     img_bytes.seek(0)
 
                     extracted_text, usage = self._extract_text_from_image(img_bytes, page_num)
@@ -681,6 +692,21 @@ class PDFParser:
                         "thoughts_tokens": usage.get("thoughts_tokens", 0),
                         "usage_from_cache": False,
                     }
+
+                    if self.preserve_vision_assets or self.use_cache:
+                        try:
+                            asset_meta = self.cache.write_vision_asset(
+                                pdf_path,
+                                page_num,
+                                png_bytes,
+                                total_pages=total_pages,
+                            )
+                            page_data.update(asset_meta)
+                        except Exception as e:
+                            print(
+                                f"    Warning: Failed to persist vision raster "
+                                f"for page {page_num}: {str(e)}"
+                            )
                     
                     # Save to cache immediately after processing (with error handling)
                     if self.use_cache:
@@ -715,6 +741,9 @@ class PDFParser:
         
         # Sort by page number to ensure correct order
         pages_data.sort(key=lambda x: x["page_number"])
+
+        # Backfill missing vision rasters (e.g. old text-only cache entries)
+        self._ensure_vision_rasters(pdf_path, pages_data, total_pages)
         
         # Count methods used
         pymupdf_count = sum(1 for p in pages_data if p.get("method") == "pymupdf")
@@ -737,6 +766,77 @@ class PDFParser:
                 print(f"  Warning: Failed to save pages batch to cache: {str(e)}")
         
         return pages_data
+
+    def _ensure_vision_rasters(
+        self,
+        pdf_path: Path,
+        pages_data: List[Dict[str, Any]],
+        total_pages: int,
+    ) -> None:
+        """
+        Ensure vision pages have reusable PNG rasters on disk.
+
+        Fresh Gemini runs already persist rasters. Cache hits with text but no
+        PNG (legacy entries / deleted rasters) are backfilled here without
+        calling Gemini again.
+        """
+        if not self.preserve_vision_assets and not self.use_cache:
+            return
+
+        from src.utils.vision_assets import vision_page_numbers
+
+        missing: list[int] = []
+        page_by_number = {int(p.get("page_number") or 0): p for p in pages_data}
+        for page_number in vision_page_numbers(pages_data):
+            page = page_by_number.get(page_number) or {}
+            resolved = self.cache.resolve_vision_asset(pdf_path, page)
+            if resolved is not None:
+                page["vision_asset_path"] = str(resolved.resolve())
+                if not page.get("vision_asset_name"):
+                    page["vision_asset_name"] = resolved.name
+                continue
+            missing.append(page_number)
+
+        if not missing:
+            return
+
+        print(
+            f"  Backfilling {len(missing)} missing vision raster(s) "
+            f"(no Gemini re-call)..."
+        )
+        with ProcessPoolExecutor(max_workers=self.max_processes) as process_executor:
+            futures = {
+                process_executor.submit(
+                    _convert_page_wrapper,
+                    (str(pdf_path), page_num, self.vision_asset_dpi),
+                ): page_num
+                for page_num in missing
+            }
+            for future in as_completed(futures):
+                page_num, image = future.result()
+                page = page_by_number.get(page_num)
+                if page is None or image is None:
+                    continue
+                if image.mode != "RGB":
+                    image = image.convert("RGB")
+                buffer = io.BytesIO()
+                image.save(buffer, format="PNG")
+                png_bytes = buffer.getvalue()
+                try:
+                    asset_meta = self.cache.write_vision_asset(
+                        pdf_path,
+                        page_num,
+                        png_bytes,
+                        total_pages=total_pages,
+                    )
+                    page.update(asset_meta)
+                    if self.use_cache:
+                        self.cache.save_page(pdf_path, page)
+                except Exception as exc:
+                    print(
+                        f"    Warning: Failed to backfill raster for page "
+                        f"{page_num}: {exc}"
+                    )
     
     def get_full_text(
         self,

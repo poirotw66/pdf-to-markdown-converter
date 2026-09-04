@@ -163,9 +163,9 @@ OFFICE_INTERMEDIATE_PDF_SAVE_DIR=               # 選填：DOCX/PPTX 轉出的�
 
 # 快取配置
 PDF_CACHE_ENABLED=true            # 啟用快取
-PDF_CACHE_DIR=./data/pdf_cache    # 快取目錄
+PDF_CACHE_DIR=./data/pdf_cache    # 快取目錄（文字 JSON + rasters/ 原頁 PNG）
 PDF_PRESERVE_VISION_ASSETS=true   # Gemini 視覺頁保留原圖並 embed；有圖時下載為 zip
-PDF_VISION_ASSET_DPI=150          # 匯出原頁 PNG 的 DPI
+PDF_VISION_ASSET_DPI=150          # 匯出原頁 PNG 的 DPI（與 Gemini 讀圖共用，避免重複 raster）
 
 # 日誌配置
 LOG_LEVEL=INFO                    # 日誌級別
