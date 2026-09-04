@@ -53,8 +53,8 @@ class FakeExporter:
     def __init__(self, output_dir: str) -> None:
         self.output_dir = Path(output_dir)
 
-    def export_summary(self, temp_pdf_path: Path, pages_data: list[dict], original_name: str, usage_summary: dict | None = None) -> Path:
-        _ = (temp_pdf_path, pages_data, original_name, usage_summary)
+    def export_summary(self, temp_pdf_path: Path, pages_data: list[dict], original_name: str, usage_summary: dict | None = None, **kwargs) -> Path:
+        _ = (temp_pdf_path, pages_data, original_name, usage_summary, kwargs)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         output_file = self.output_dir / "result.md"
         output_file.write_text("# converted\n", encoding="utf-8")

@@ -50,7 +50,8 @@
 - 👁️ 即時 PDF 預覽
 - 📝 Markdown 預覽渲染
 - 🔄 左右分欄對比
-- 💾 一鍵下載轉換結果
+- 💾 一鍵下載轉換結果（純文字為 `.md`；含視覺頁原圖時為 `.zip`：`*.md` + `assets/pNN.png`）
+- 🖼️ Gemini 視覺頁保留原頁 PNG，並就地插入 Visual Evidence（參考 llm-wiki 慣例）
 - 🎨 可自訂 Prompt 樣板
 - ⚡ 混合解析策略（PyMuPDF 快速路徑 + Gemini Vision）
 
@@ -66,7 +67,8 @@ pdf-to-markdown-converter/
 ├── src/utils/               # 工具模組
 │   ├── pdf_parser.py        # PDF 解析器（混合策略）
 │   ├── pdf_cache.py          # PDF 快取機制
-│   ├── md_exporter.py        # Markdown 匯出器
+│   ├── md_exporter.py        # Markdown 匯出器（可附 assets）
+│   ├── vision_assets.py      # 視覺頁 PNG 匯出與 Visual Evidence
 │   ├── prompts.py            # Prompt 樣板管理
 │   ├── logging_config.py     # 日誌配置
 │   └── retry.py              # 重試機制
@@ -162,6 +164,8 @@ OFFICE_INTERMEDIATE_PDF_SAVE_DIR=               # 選填：DOCX/PPTX 轉出的�
 # 快取配置
 PDF_CACHE_ENABLED=true            # 啟用快取
 PDF_CACHE_DIR=./data/pdf_cache    # 快取目錄
+PDF_PRESERVE_VISION_ASSETS=true   # Gemini 視覺頁保留原圖並 embed；有圖時下載為 zip
+PDF_VISION_ASSET_DPI=150          # 匯出原頁 PNG 的 DPI
 
 # 日誌配置
 LOG_LEVEL=INFO                    # 日誌級別

@@ -45,6 +45,9 @@ PDF_CACHE_ENABLED=true
 PDF_CACHE_DIR=./data/pdf_cache
 # Token usage JSON logs (totals + per-page); estimate USD from public Gemini rates
 PDF_USAGE_LOG_DIR=./data/usage_logs
+# Preserve Gemini vision page rasters as assets/pNN.png (API returns zip when present)
+PDF_PRESERVE_VISION_ASSETS=true
+PDF_VISION_ASSET_DPI=150
 
 # Logging
 LOG_LEVEL=INFO

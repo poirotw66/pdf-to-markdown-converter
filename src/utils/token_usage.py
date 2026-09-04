@@ -275,7 +275,7 @@ def usage_response_headers(report: ConversionUsageReport, log_path: Optional[Pat
         "Access-Control-Expose-Headers": (
             "X-Usage-Model, X-Usage-Input-Tokens, X-Usage-Output-Tokens, "
             "X-Usage-Thoughts-Tokens, X-Usage-Estimated-Cost-Usd, "
-            "X-Usage-Log-Name, X-Usage-Log-Path"
+            "X-Usage-Log-Name, X-Usage-Log-Path, X-Output-Package"
         ),
     }
 

@@ -603,18 +603,19 @@ document.addEventListener('DOMContentLoaded', () => {
     resetBtn.addEventListener('click', resetAll);
     resetBtnPreview.addEventListener('click', resetAll);
 
-    function setupDownloadButton(blob, filename) {
+    function setupDownloadButton(blob, filename, packageKind) {
         downloadUrl = URL.createObjectURL(blob);
+        const isZip = packageKind === 'zip' || (blob.type && blob.type.includes('zip'));
         const downloadHandler = () => {
             const a = document.createElement('a');
             a.href = downloadUrl;
             const outputName = filename.replace(/\.[^.]+$/, '') || 'converted';
-            a.download = `${outputName}.md`;
+            a.download = isZip ? `${outputName}.zip` : `${outputName}.md`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
         };
-        
+
         if (downloadBtn) {
             downloadBtn.onclick = downloadHandler;
             downloadBtn.style.display = 'inline-flex';
@@ -622,6 +623,40 @@ document.addEventListener('DOMContentLoaded', () => {
         if (downloadBtnPreview) {
             downloadBtnPreview.onclick = downloadHandler;
         }
+    }
+
+    async function markdownFromConversionBlob(blob, packageKind) {
+        const isZip = packageKind === 'zip' || (blob.type && blob.type.includes('zip'));
+        if (!isZip) {
+            return await blob.text();
+        }
+        if (typeof JSZip === 'undefined') {
+            throw new Error('無法解析含圖片的壓縮包（JSZip 未載入）');
+        }
+        const zip = await JSZip.loadAsync(blob);
+        const mdEntry = Object.keys(zip.files).find(
+            (name) => name.toLowerCase().endsWith('.md') && !zip.files[name].dir
+        );
+        if (!mdEntry) {
+            throw new Error('壓縮包內找不到 Markdown 檔案');
+        }
+        let text = await zip.file(mdEntry).async('string');
+        const assetFiles = Object.keys(zip.files).filter(
+            (name) => /assets\/p\d+\.png$/i.test(name) && !zip.files[name].dir
+        );
+        for (const assetPath of assetFiles) {
+            const assetBlob = await zip.file(assetPath).async('blob');
+            const objectUrl = URL.createObjectURL(assetBlob);
+            const basename = assetPath.split('/').pop();
+            const patterns = [
+                new RegExp(`(\\]\\()${assetPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\))`, 'g'),
+                new RegExp(`(\\]\\()assets/${basename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\))`, 'g'),
+            ];
+            for (const pattern of patterns) {
+                text = text.replace(pattern, `$1${objectUrl}$2`);
+            }
+        }
+        return text;
     }
 
     function setupUsageDownloadButton(logName) {
@@ -735,6 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const blob = await response.blob();
+            const packageKind = (response.headers.get('X-Output-Package') || '').toLowerCase();
 
             const usageModel = response.headers.get('X-Usage-Model') || '';
             const usageInput = response.headers.get('X-Usage-Input-Tokens') || '0';
@@ -750,7 +786,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     `Token：input ${usageInput} / output ${usageOutput}` +
                     (usageThoughts && usageThoughts !== '0' ? ` / thoughts ${usageThoughts}` : '') +
                     ` · 估算費用 USD ${usageCost}` +
-                    (usageModel ? ` · ${usageModel}` : '');
+                    (usageModel ? ` · ${usageModel}` : '') +
+                    (packageKind === 'zip' ? ' · 含原頁圖片 (zip)' : '');
                 if (usageLogPath || usageLogName) {
                     usageSummaryEl.title = `用量明細：${usageLogName || usageLogPath}`;
                 }
@@ -764,10 +801,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 estimated_cost_usd: usageCost,
                 log_name: usageLogName,
                 log_path: usageLogPath,
+                output_package: packageKind,
             });
 
-            // 讀取 Markdown 內容
-            const text = await blob.text();
+            // 讀取 Markdown 內容（zip 時解出 .md 並把 assets 換成 blob URL 供預覽）
+            const text = await markdownFromConversionBlob(blob, packageKind);
             markdownContent = text;
             
             // 渲染 Markdown
@@ -779,7 +817,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             progressBar.style.width = '100%';
-            fileStatus.textContent = '轉換完成！';
+            fileStatus.textContent = packageKind === 'zip'
+                ? '轉換完成！（含視覺頁原圖）'
+                : '轉換完成！';
             previewConversionArea.classList.remove('processing');
             
             // 顯示預覽容器的標題和操作按鈕
@@ -791,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 隱藏轉換控制區域，只顯示預覽區域
             setTimeout(() => {
                 previewConversionArea.style.display = 'none';
-                setupDownloadButton(blob, currentFile.name);
+                setupDownloadButton(blob, currentFile.name, packageKind);
             }, 500);
 
         } catch (error) {

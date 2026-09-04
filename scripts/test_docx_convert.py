@@ -84,11 +84,14 @@ def convert_one(
                 print(msg)
         return 1, msg
 
-    if not force and output_path.is_file():
-        msg = f"skipped_existing {output_path.resolve()}"
+    candidate_md = output_path.with_suffix(".md")
+    candidate_zip = output_path.with_suffix(".zip")
+    if not force and (candidate_md.is_file() or candidate_zip.is_file()):
+        existing = candidate_zip if candidate_zip.is_file() else candidate_md
+        msg = f"skipped_existing {existing.resolve()}"
         if not quiet:
             with _print_lock:
-                print(f"[{doc_path.name}] skip: output already exists -> {output_path.resolve()}")
+                print(f"[{doc_path.name}] skip: output already exists -> {existing.resolve()}")
         return 0, msg
 
     payload = doc_path.read_bytes()
@@ -116,12 +119,24 @@ def convert_one(
             print(f"[{doc_path.name}] status_code={response.status_code}")
 
     if response.status_code == 200:
-        text = response.text
+        package = (response.headers.get("x-output-package") or "").lower()
+        content_type = (response.headers.get("content-type") or "").lower()
+        is_zip = package == "zip" or "zip" in content_type
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(text, encoding="utf-8")
+        if is_zip:
+            write_path = output_path.with_suffix(".zip")
+            write_path.write_bytes(response.content)
+            saved_note = f"saved_package {write_path.resolve()} bytes={len(response.content)}"
+            preview_text = ""
+        else:
+            write_path = output_path.with_suffix(".md")
+            text = response.text
+            write_path.write_text(text, encoding="utf-8")
+            saved_note = f"saved_markdown {write_path.resolve()} chars={len(text)}"
+            preview_text = text
         if not quiet:
             with _print_lock:
-                print(f"[{doc_path.name}] saved_markdown {output_path.resolve()} chars={len(text)}")
+                print(f"[{doc_path.name}] {saved_note}")
                 print(
                     f"[{doc_path.name}] usage "
                     f"model={response.headers.get('x-usage-model', '')} "
@@ -129,11 +144,12 @@ def convert_one(
                     f"output={response.headers.get('x-usage-output-tokens', '0')} "
                     f"thoughts={response.headers.get('x-usage-thoughts-tokens', '0')} "
                     f"est_usd={response.headers.get('x-usage-estimated-cost-usd', '0')} "
-                    f"log={response.headers.get('x-usage-log-path', '')}"
+                    f"log={response.headers.get('x-usage-log-path', '')} "
+                    f"package={package or ('zip' if is_zip else 'markdown')}"
                 )
-                if preview_chars > 0:
+                if preview_chars > 0 and preview_text:
                     print(f"[{doc_path.name}] --- preview ---")
-                    print(text[:preview_chars])
+                    print(preview_text[:preview_chars])
         return 0, "ok"
 
     try:

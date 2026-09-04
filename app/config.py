@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     pdf_cache_dir: str = "./data/pdf_cache"
     # Per-conversion token usage JSON (totals + per-page). Still covered by data/ in .gitignore.
     pdf_usage_log_dir: str = "./data/usage_logs"
+    # Preserve Gemini vision page rasters as assets/pNN.png and embed in Markdown.
+    # When assets exist, the API returns a zip (md + assets/) instead of a bare .md.
+    pdf_preserve_vision_assets: bool = True
+    pdf_vision_asset_dpi: int = 150
 
     # Logging Configuration
     log_level: str = "INFO"

@@ -286,7 +286,7 @@ async def convert_pdf(
         except Exception:
             log.warning("Failed to write token usage log", exc_info=True)
 
-        # Export summary (single MD file)
+        # Export summary MD; vision pages may also produce assets/ → zip package
         summary_path = exporter.export_summary(
             temp_pdf_path,
             pages_data,
@@ -298,6 +298,8 @@ async def convert_pdf(
                 "thoughts_tokens": usage_report.thoughts_tokens,
                 "estimated_cost_usd": usage_report.estimated_cost_usd,
             },
+            preserve_vision_assets=settings.pdf_preserve_vision_assets,
+            vision_asset_dpi=settings.pdf_vision_asset_dpi,
         )
 
         if not summary_path or not summary_path.exists():
@@ -306,12 +308,17 @@ async def convert_pdf(
         # Schedule cleanup after response is sent
         background_tasks.add_task(cleanup_temp_dir, temp_dir)
 
+        download_stem = Path(file.filename).stem or "converted"
+        is_zip = summary_path.suffix.lower() == ".zip"
+        headers = usage_response_headers(usage_report, usage_log_path)
+        headers["X-Output-Package"] = "zip" if is_zip else "markdown"
+
         service_metrics.increment("conversion_success_total")
         return FileResponse(
             path=summary_path,
-            filename=f"{Path(file.filename).stem}.md",
-            media_type="text/markdown",
-            headers=usage_response_headers(usage_report, usage_log_path),
+            filename=f"{download_stem}.zip" if is_zip else f"{download_stem}.md",
+            media_type="application/zip" if is_zip else "text/markdown",
+            headers=headers,
         )
 
     except HTTPException:
