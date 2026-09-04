@@ -84,13 +84,23 @@ class PDFCache:
         png_bytes: bytes,
         *,
         total_pages: int,
+        asset_name: str | None = None,
     ) -> dict[str, Any]:
         """
-        Persist a vision-page PNG next to the text cache.
+        Persist a vision-page or embedded PNG next to the text cache.
 
         Returns metadata suitable for attaching to page_data (includes runtime path).
         """
-        asset_name = page_asset_filename(page_number, total_pages)
+        name = asset_name or page_asset_filename(page_number, total_pages)
+        return self.write_asset_bytes(pdf_path, name, png_bytes)
+
+    def write_asset_bytes(
+        self,
+        pdf_path: Path,
+        asset_name: str,
+        png_bytes: bytes,
+    ) -> dict[str, Any]:
+        """Write raw PNG bytes under the PDF raster cache directory."""
         dest_dir = self.rasters_dir(pdf_path)
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / asset_name
@@ -159,6 +169,28 @@ class PDFCache:
                 hydrated["vision_asset_name"] = resolved.name
         else:
             hydrated.pop("vision_asset_path", None)
+
+        embedded = hydrated.get("embedded_image_assets")
+        if isinstance(embedded, list):
+            refreshed: list[dict[str, Any]] = []
+            for asset in embedded:
+                if not isinstance(asset, dict):
+                    continue
+                item = dict(asset)
+                name = item.get("vision_asset_name")
+                if name:
+                    candidate = self.rasters_dir(pdf_path) / str(name)
+                    if candidate.is_file():
+                        expected = item.get("vision_asset_sha256")
+                        if expected:
+                            actual = hashlib.sha256(candidate.read_bytes()).hexdigest()
+                            if actual != expected:
+                                item.pop("vision_asset_path", None)
+                                refreshed.append(item)
+                                continue
+                        item["vision_asset_path"] = str(candidate.resolve())
+                refreshed.append(item)
+            hydrated["embedded_image_assets"] = refreshed
         return hydrated
 
     def get_cached_pages(self, pdf_path: Path) -> Optional[Dict[str, Any]]:

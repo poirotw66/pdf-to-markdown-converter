@@ -37,6 +37,25 @@ def test_extract_usage_from_response_reads_metadata() -> None:
     assert usage["total_tokens"] == 1250
 
 
+def test_estimate_cost_pinned_flash_matches_family() -> None:
+    cost_latest = estimate_cost_usd(
+        "gemini-flash-latest",
+        1_000_000,
+        0,
+        0,
+        as_of=date(2026, 9, 4),
+    )
+    cost_pinned = estimate_cost_usd(
+        "gemini-3.8-flash",
+        1_000_000,
+        0,
+        0,
+        as_of=date(2026, 9, 4),
+    )
+    assert abs(cost_latest - cost_pinned) < 1e-9
+    assert abs(cost_pinned - 0.75) < 1e-9
+
+
 def test_estimate_cost_flash_uses_intro_public_rates() -> None:
     # Through 2026-12-31: 1M input + 1M output at $0.75 / $3.75
     cost = estimate_cost_usd(

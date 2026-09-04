@@ -1,18 +1,23 @@
 """Export PDF pages to Markdown files (optionally with vision assets)."""
 from __future__ import annotations
 
+import shutil
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from src.utils.logging_config import get_logger
 from src.utils.vision_assets import (
     ASSETS_DIR_NAME,
+    embedded_sources_from_pages,
     export_vision_assets,
     reusable_sources_from_pages,
     vision_page_numbers,
     visual_evidence_markdown,
 )
+
+log = get_logger(__name__)
 
 
 def _extraction_timestamp_iso(pages_data: List[Dict[str, Any]]) -> str:
@@ -108,10 +113,10 @@ class MDExporter:
                     f.write(md_content)
                 exported_count += 1
             except Exception as e:
-                print(f"  Warning: Failed to save page {page_num} to MD: {str(e)}")
+                log.warning(f"  Warning: Failed to save page {page_num} to MD: {str(e)}")
 
         if exported_count > 0:
-            print(f"  ✓ Exported {exported_count} pages to {pdf_md_dir}")
+            log.info(f"  ✓ Exported {exported_count} pages to {pdf_md_dir}")
 
         return exported_count
 
@@ -155,15 +160,15 @@ class MDExporter:
         pdf_md_dir = self.output_dir / pdf_name
         pdf_md_dir.mkdir(parents=True, exist_ok=True)
 
-        assets_by_page: dict[int, str] = {}
+        assets_by_page: dict[int, list[str]] = {}
         if preserve_vision_assets:
             vision_pages = vision_page_numbers(pages_data)
             total_pages = max(
                 (int(p.get("page_number") or 0) for p in pages_data),
                 default=len(pages_data),
             )
+            assets_dir = pdf_md_dir / ASSETS_DIR_NAME
             if vision_pages:
-                assets_dir = pdf_md_dir / ASSETS_DIR_NAME
                 reusable = reusable_sources_from_pages(pages_data)
                 exported = export_vision_assets(
                     pdf_path,
@@ -173,15 +178,35 @@ class MDExporter:
                     dpi=vision_asset_dpi,
                     reusable_sources=reusable,
                 )
-                assets_by_page = {
-                    item.page_number: item.relative_path for item in exported
-                }
+                for item in exported:
+                    assets_by_page.setdefault(item.page_number, []).append(
+                        item.relative_path
+                    )
                 if exported:
                     reused = sum(1 for item in exported if item.reused)
                     rendered = len(exported) - reused
-                    print(
+                    log.info(
                         f"  ✓ Exported {len(exported)} vision assets to {assets_dir}"
                         f" (reused={reused}, rendered={rendered})"
+                    )
+
+            embedded_map = embedded_sources_from_pages(pages_data)
+            if embedded_map:
+                assets_dir.mkdir(parents=True, exist_ok=True)
+                copied = 0
+                for page_number, paths in embedded_map.items():
+                    for source in paths:
+                        target = assets_dir / source.name
+                        if source.resolve() != target.resolve():
+                            shutil.copy2(source, target)
+                        relative = f"{ASSETS_DIR_NAME}/{target.name}"
+                        bucket = assets_by_page.setdefault(page_number, [])
+                        if relative not in bucket:
+                            bucket.append(relative)
+                            copied += 1
+                if copied:
+                    log.info(
+                        f"  ✓ Copied {copied} embedded image asset(s) to {assets_dir}"
                     )
 
         summary_file = pdf_md_dir / f"{pdf_name}.md"
@@ -202,10 +227,11 @@ class MDExporter:
                 f"**Cost Note:** estimate from public API rates, not an invoice\n"
             )
 
+        asset_count = sum(len(v) for v in assets_by_page.values())
         asset_note = ""
-        if assets_by_page:
+        if asset_count:
             asset_note = (
-                f"**Vision Assets:** {len(assets_by_page)} page image(s) under "
+                f"**Vision Assets:** {asset_count} image(s) under "
                 f"`{ASSETS_DIR_NAME}/`  \n"
             )
 
@@ -231,20 +257,21 @@ class MDExporter:
 
 {text}
 """
-            relative = assets_by_page.get(int(page_num or 0))
-            if relative:
+            for relative in assets_by_page.get(int(page_num or 0), []):
+                title = Path(relative).stem
                 summary_content += "\n" + visual_evidence_markdown(
                     int(page_num),
                     relative,
+                    title=title,
                 )
 
             summary_content += "\n---\n\n"
 
         try:
             summary_file.write_text(summary_content, encoding="utf-8")
-            print(f"  ✓ Exported summary to {summary_file}")
+            log.info(f"  ✓ Exported summary to {summary_file}")
         except Exception as e:
-            print(f"  Warning: Failed to save summary MD: {str(e)}")
+            log.warning(f"  Warning: Failed to save summary MD: {str(e)}")
             return None
 
         if not assets_by_page:
@@ -255,10 +282,10 @@ class MDExporter:
             with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
                 archive.write(summary_file, arcname=f"{pdf_name}.md")
                 assets_dir = pdf_md_dir / ASSETS_DIR_NAME
-                for png in sorted(assets_dir.glob("p*.png")):
+                for png in sorted(assets_dir.glob("*.png")):
                     archive.write(png, arcname=f"{ASSETS_DIR_NAME}/{png.name}")
-            print(f"  ✓ Packaged Markdown + assets → {zip_path}")
+            log.info(f"  ✓ Packaged Markdown + assets → {zip_path}")
             return zip_path
         except Exception as e:
-            print(f"  Warning: Failed to build zip package: {str(e)}")
+            log.warning(f"  Warning: Failed to build zip package: {str(e)}")
             return summary_file

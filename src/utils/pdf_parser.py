@@ -172,7 +172,7 @@ def _convert_page_wrapper(args):
         image = _convert_pdf_page_to_image(pdf_path_str, page_num, dpi=int(dpi))
         return page_num, image
     except Exception as e:
-        print(f"    Error converting page {page_num} to image: {str(e)}")
+        log.warning(f"    Error converting page {page_num} to image: {str(e)}")
         return page_num, None
 
 
@@ -244,6 +244,9 @@ class PDFParser:
         self.use_cache = settings.pdf_cache_enabled
         self.preserve_vision_assets = settings.pdf_preserve_vision_assets
         self.vision_asset_dpi = settings.pdf_vision_asset_dpi
+        self.extract_embedded_images = settings.pdf_extract_embedded_images
+        self.embedded_image_min_area = settings.pdf_embedded_image_min_area
+        self.embedded_image_max_per_page = settings.pdf_embedded_image_max_per_page
         
         # Prompt template handling
         # If prompt_template is a template ID, use it; if it's a custom string, use it directly
@@ -324,7 +327,7 @@ class PDFParser:
                 doc.close()
 
         except Exception as e:
-            print(f"Error extracting text with PyMuPDF from page {page_num}: {str(e)}")
+            log.warning(f"Error extracting text with PyMuPDF from page {page_num}: {str(e)}")
             return "", 0.0, False, ()
 
     def _should_use_gemini_vision(
@@ -501,19 +504,19 @@ class PDFParser:
             total_pages = min(total_pages, max_pages)
         doc.close()
         
-        print(f"Parsing PDF: {pdf_path.name} ({total_pages} pages)")
+        log.info(f"Parsing PDF: {pdf_path.name} ({total_pages} pages)")
         
         # Check cache for resume capability
         if self.use_cache:
             cached_pages = self.cache.get_cached_page_numbers(pdf_path)
             
             if cached_pages:
-                print(f"Cache found: {len(cached_pages)}/{total_pages} pages already processed")
-                print("  Resuming from cache...")
+                log.info(f"Cache found: {len(cached_pages)}/{total_pages} pages already processed")
+                log.info("  Resuming from cache...")
             else:
-                print("No cache found, starting fresh")
+                log.info("No cache found, starting fresh")
         
-        print("Using hybrid approach: PyMuPDF fast path + Gemini vision when routing selects it")
+        log.info("Using hybrid approach: PyMuPDF fast path + Gemini vision when routing selects it")
         
         pages_data = []
         pages_need_gemini = []  # Pages that need Gemini vision processing
@@ -532,19 +535,19 @@ class PDFParser:
                     cached_page["output_tokens"] = 0
                     cached_page["thoughts_tokens"] = 0
                     pages_data.append(cached_page)
-                    print(f"  ✓ Page {page_num}: Loaded from cache ({cached_page.get('method', 'unknown')})")
+                    log.info(f"  ✓ Page {page_num}: Loaded from cache ({cached_page.get('method', 'unknown')})")
                 else:
                     pages_to_process.append(page_num)
         else:
             pages_to_process = list(range(1, total_pages + 1))
         
         if not pages_to_process:
-            print("All pages already cached! Returning cached results.")
+            log.info("All pages already cached! Returning cached results.")
             pages_data.sort(key=lambda x: x["page_number"])
             self._ensure_vision_rasters(pdf_path, pages_data, total_pages)
             return pages_data
         
-        print(f"\nStep 1: Fast text extraction with PyMuPDF ({len(pages_to_process)} pages to process)...")
+        log.info(f"\nStep 1: Fast text extraction with PyMuPDF ({len(pages_to_process)} pages to process)...")
         
         # Step 2: Fast extraction with PyMuPDF for uncached pages
         for page_num in pages_to_process:
@@ -585,7 +588,7 @@ class PDFParser:
                 if self.gemini_on_low_text_density and density < self.text_density_threshold:
                     reason_parts.append(f"low density ({density:.6f}<{self.text_density_threshold})")
                 reason = ", ".join(reason_parts) if reason_parts else "vision routing"
-                print(f"  Page {page_num}: {reason} — will use Gemini vision")
+                log.info(f"  Page {page_num}: {reason} — will use Gemini vision")
             else:
                 # Use PyMuPDF result directly and cache it
                 page_data = {
@@ -598,6 +601,15 @@ class PDFParser:
                     "thoughts_tokens": 0,
                     "usage_from_cache": False,
                 }
+                if self.preserve_vision_assets and self.extract_embedded_images:
+                    embedded = self._persist_embedded_images(
+                        pdf_path, page_num, total_pages
+                    )
+                    if embedded:
+                        page_data["embedded_image_assets"] = embedded
+                        log.info(
+                            f"  Page {page_num}: kept {len(embedded)} embedded image(s)"
+                        )
                 pages_data.append(page_data)
                 
                 # Save to cache
@@ -618,15 +630,15 @@ class PDFParser:
                         cached_page["output_tokens"] = 0
                         cached_page["thoughts_tokens"] = 0
                         pages_data.append(cached_page)
-                        print(f"  ✓ Page {page_num}: Gemini result loaded from cache")
+                        log.info(f"  ✓ Page {page_num}: Gemini result loaded from cache")
                         continue
                 pages_to_process_gemini.append(page_num)
             
             if pages_to_process_gemini:
-                print(f"\nStep 2: Processing {len(pages_to_process_gemini)} pages with Gemini vision (multiprocess image conversion + multithreaded API calls)...")
+                log.info(f"\nStep 2: Processing {len(pages_to_process_gemini)} pages with Gemini vision (multiprocess image conversion + multithreaded API calls)...")
                 
                 # Convert PDF pages to images using multiprocessing
-                print("  Converting PDF pages to images (multiprocess)...")
+                log.info("  Converting PDF pages to images (multiprocess)...")
                 images_dict = {}
                 
                 # Use ProcessPoolExecutor for CPU-intensive image conversion
@@ -646,7 +658,7 @@ class PDFParser:
                             images_dict[page_num] = image
                 
                 # Process images with Gemini API using multithreading with rate limiting
-                print("  Extracting text with Gemini vision (multithreaded with rate limiting)...")
+                log.info("  Extracting text with Gemini vision (multithreaded with rate limiting)...")
                 
                 def process_gemini_page(page_num):
                     """Process a single page with Gemini."""
@@ -703,7 +715,7 @@ class PDFParser:
                             )
                             page_data.update(asset_meta)
                         except Exception as e:
-                            print(
+                            log.warning(
                                 f"    Warning: Failed to persist vision raster "
                                 f"for page {page_num}: {str(e)}"
                             )
@@ -714,7 +726,7 @@ class PDFParser:
                             self.cache.save_page(pdf_path, page_data)
                         except Exception as e:
                             # Log but don't fail if cache save fails
-                            print(f"    Warning: Failed to save page {page_num} to cache: {str(e)}")
+                            log.warning(f"    Warning: Failed to save page {page_num} to cache: {str(e)}")
                     
                     return page_data
                 
@@ -732,7 +744,7 @@ class PDFParser:
                         gemini_results[result["page_number"]] = result
                         completed += 1
                         if completed % 5 == 0 or completed == len(pages_to_process_gemini):
-                            print(f"    Progress: {completed}/{len(pages_to_process_gemini)} pages processed with Gemini")
+                            log.info(f"    Progress: {completed}/{len(pages_to_process_gemini)} pages processed with Gemini")
                 
                 # Add Gemini results to pages_data
                 for page_num in pages_to_process_gemini:
@@ -750,11 +762,11 @@ class PDFParser:
         gemini_count = sum(1 for p in pages_data if p.get("method") == "gemini_vision")
         cached_count = sum(1 for p in pages_data if p.get("cached_at") is not None)
         
-        print(f"\n✓ Successfully extracted text from {len(pages_data)} pages")
-        print(f"  - PyMuPDF (fast): {pymupdf_count} pages")
-        print(f"  - Gemini Vision: {gemini_count} pages")
+        log.info(f"\n✓ Successfully extracted text from {len(pages_data)} pages")
+        log.info(f"  - PyMuPDF (fast): {pymupdf_count} pages")
+        log.info(f"  - Gemini Vision: {gemini_count} pages")
         if cached_count > 0:
-            print(f"  - From cache: {cached_count} pages")
+            log.info(f"  - From cache: {cached_count} pages")
         
         # Save all pages to cache in batch (for efficiency)
         # Note: Individual pages are already cached during processing, this is a final update
@@ -763,9 +775,47 @@ class PDFParser:
                 self.cache.save_pages_batch(pdf_path, pages_data)
             except Exception as e:
                 # Log but don't fail if batch cache save fails
-                print(f"  Warning: Failed to save pages batch to cache: {str(e)}")
+                log.warning(f"  Warning: Failed to save pages batch to cache: {str(e)}")
         
         return pages_data
+
+    def _persist_embedded_images(
+        self,
+        pdf_path: Path,
+        page_num: int,
+        total_pages: int,
+    ) -> list[dict[str, Any]]:
+        """Extract and cache significant embedded images for a PyMuPDF-only page."""
+        from src.utils.vision_assets import (
+            embedded_asset_filename,
+            extract_embedded_pngs_from_pdf_page,
+        )
+
+        extracted = extract_embedded_pngs_from_pdf_page(
+            pdf_path,
+            page_num,
+            min_area=self.embedded_image_min_area,
+            max_images=self.embedded_image_max_per_page,
+        )
+        assets: list[dict[str, Any]] = []
+        for index, (png_bytes, width, height) in enumerate(extracted, start=1):
+            asset_name = embedded_asset_filename(page_num, index, total_pages)
+            try:
+                meta = self.cache.write_vision_asset(
+                    pdf_path,
+                    page_num,
+                    png_bytes,
+                    total_pages=total_pages,
+                    asset_name=asset_name,
+                )
+                meta["width"] = width
+                meta["height"] = height
+                assets.append(meta)
+            except Exception as exc:
+                log.warning(
+                    f"    Failed to persist embedded image {asset_name}: {exc}"
+                )
+        return assets
 
     def _ensure_vision_rasters(
         self,
@@ -800,7 +850,7 @@ class PDFParser:
         if not missing:
             return
 
-        print(
+        log.info(
             f"  Backfilling {len(missing)} missing vision raster(s) "
             f"(no Gemini re-call)..."
         )
@@ -833,7 +883,7 @@ class PDFParser:
                     if self.use_cache:
                         self.cache.save_page(pdf_path, page)
                 except Exception as exc:
-                    print(
+                    log.warning(
                         f"    Warning: Failed to backfill raster for page "
                         f"{page_num}: {exc}"
                     )

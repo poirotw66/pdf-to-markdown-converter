@@ -1,6 +1,7 @@
 """Export vision-page PNGs for Markdown packages (llm-wiki-style assets)."""
 from __future__ import annotations
 
+import io
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,16 @@ def page_asset_filename(page_number: int, total_pages: int) -> str:
     return f"p{page_number:0{width}d}.png"
 
 
+def embedded_asset_filename(
+    page_number: int,
+    image_index: int,
+    total_pages: int,
+) -> str:
+    """Return ``pNN_eMM.png`` for an embedded image on a text-path page."""
+    width = max(2, len(str(max(total_pages, 1))))
+    return f"p{page_number:0{width}d}_e{image_index:02d}.png"
+
+
 def vision_page_numbers(pages_data: Sequence[dict]) -> list[int]:
     """Pages whose extraction used Gemini vision (the rasters we actually read)."""
     pages: list[int] = []
@@ -52,7 +63,7 @@ def vision_page_numbers(pages_data: Sequence[dict]) -> list[int]:
 def reusable_sources_from_pages(
     pages_data: Sequence[dict],
 ) -> dict[int, Path]:
-    """Collect runtime/cached raster paths already attached to page dicts."""
+    """Collect full-page raster paths already attached to page dicts."""
     sources: dict[int, Path] = {}
     for page in pages_data:
         page_number = int(page.get("page_number") or 0)
@@ -65,6 +76,103 @@ def reusable_sources_from_pages(
         if path.is_file():
             sources[page_number] = path
     return sources
+
+
+def embedded_sources_from_pages(
+    pages_data: Sequence[dict],
+) -> dict[int, list[Path]]:
+    """Collect embedded-image asset paths from PyMuPDF text-path pages."""
+    sources: dict[int, list[Path]] = {}
+    for page in pages_data:
+        page_number = int(page.get("page_number") or 0)
+        if page_number <= 0:
+            continue
+        assets = page.get("embedded_image_assets") or []
+        paths: list[Path] = []
+        for asset in assets:
+            if not isinstance(asset, Mapping):
+                continue
+            raw = asset.get("vision_asset_path") or asset.get("path")
+            if not raw:
+                continue
+            path = Path(str(raw))
+            if path.is_file():
+                paths.append(path)
+        if paths:
+            sources[page_number] = paths
+    return sources
+
+
+def extract_embedded_pngs_from_pdf_page(
+    pdf_path: Path | str,
+    page_number: int,
+    *,
+    min_area: int = 10_000,
+    max_images: int = 8,
+) -> list[tuple[bytes, int, int]]:
+    """
+    Extract significant embedded images from one PDF page as PNG bytes.
+
+    Skips tiny icons below ``min_area`` (width * height in pixels).
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return []
+
+    pdf = Path(pdf_path)
+    results: list[tuple[bytes, int, int]] = []
+    seen_xrefs: set[int] = set()
+    try:
+        doc = fitz.open(str(pdf))
+    except Exception:
+        log.warning(f"Failed to open PDF for embedded images: {pdf}", exc_info=True)
+        return []
+
+    try:
+        if page_number < 1 or page_number > doc.page_count:
+            return []
+        page = doc[page_number - 1]
+        images = page.get_images(full=True) or []
+        for entry in images:
+            if len(results) >= max_images:
+                break
+            xref = int(entry[0])
+            if xref in seen_xrefs:
+                continue
+            seen_xrefs.add(xref)
+            try:
+                extracted = doc.extract_image(xref)
+            except Exception:
+                continue
+            if not extracted:
+                continue
+            width = int(extracted.get("width") or 0)
+            height = int(extracted.get("height") or 0)
+            if width * height < max(0, min_area):
+                continue
+            raw = extracted.get("image") or b""
+            if not raw:
+                continue
+            try:
+                with Image.open(io.BytesIO(raw)) as image:
+                    if image.mode not in ("RGB", "RGBA"):
+                        image = image.convert("RGB")
+                    elif image.mode == "RGBA":
+                        background = Image.new("RGB", image.size, (255, 255, 255))
+                        background.paste(image, mask=image.split()[-1])
+                        image = background
+                    buffer = io.BytesIO()
+                    image.save(buffer, format="PNG")
+                    results.append((buffer.getvalue(), image.width, image.height))
+            except Exception:
+                log.debug(
+                    f"Skip undecodable embedded image xref={xref} on page {page_number}"
+                )
+                continue
+    finally:
+        doc.close()
+    return results
 
 
 def _record_exported(

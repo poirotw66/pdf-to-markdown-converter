@@ -190,7 +190,8 @@ async def convert_pdf(
         file: PDF, DOCX, or PPTX file to convert
         prompt_template: Prompt template ID or custom prompt string
         api_key: Google Gemini API key (required if not set in environment)
-        model: Optional Gemini model override (`gemini-pro-latest` or `gemini-flash-latest`)
+        model: Optional Gemini model override (`gemini-flash-latest`, `gemini-3.8-flash`,
+            `gemini-pro-latest`, or `gemini-3.1-pro-preview`)
     """
     service_metrics.increment("conversion_requests_total")
 

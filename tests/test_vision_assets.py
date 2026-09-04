@@ -4,10 +4,16 @@ from zipfile import ZipFile
 
 from src.utils.md_exporter import MDExporter
 from src.utils.vision_assets import (
+    embedded_asset_filename,
     page_asset_filename,
     vision_page_numbers,
     visual_evidence_markdown,
 )
+
+
+def test_embedded_asset_filename() -> None:
+    assert embedded_asset_filename(2, 1, 9) == "p02_e01.png"
+    assert embedded_asset_filename(2, 3, 120) == "p002_e03.png"
 
 
 def test_page_asset_filename_pads_by_total() -> None:
@@ -131,7 +137,7 @@ def test_export_summary_embeds_and_zips_when_assets(
         md_name = next(n for n in names if n.endswith(".md"))
         md_text = archive.read(md_name).decode("utf-8")
     assert "視覺頁內容" in md_text
-    assert "![第 2 頁](assets/p02.png)" in md_text
+    assert "![p02](assets/p02.png)" in md_text
     assert "#### Visual Evidence" in md_text
     assert "文字頁" in md_text
     # Text-only page should not get an empty evidence block

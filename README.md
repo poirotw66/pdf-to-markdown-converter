@@ -128,7 +128,8 @@ GOOGLE_API_KEY=your-google-api-key
 GEMINI_MODEL=gemini-flash-latest
 ```
 
-`GEMINI_MODEL` 目前支援：`gemini-pro-latest`、`gemini-flash-latest`。
+`GEMINI_MODEL` 目前支援：`gemini-flash-latest`、`gemini-3.8-flash`、`gemini-pro-latest`、`gemini-3.1-pro-preview`。  
+費用估算建議優先使用釘版型號（`gemini-3.8-flash` / `gemini-3.1-pro-preview`），`*-latest` 會隨 Google 熱切換。
 
 ### 可選配置
 
@@ -166,6 +167,8 @@ PDF_CACHE_ENABLED=true            # 啟用快取
 PDF_CACHE_DIR=./data/pdf_cache    # 快取目錄（文字 JSON + rasters/ 原頁 PNG）
 PDF_PRESERVE_VISION_ASSETS=true   # Gemini 視覺頁保留原圖並 embed；有圖時下載為 zip
 PDF_VISION_ASSET_DPI=150          # 匯出原頁 PNG 的 DPI（與 Gemini 讀圖共用，避免重複 raster）
+PDF_EXTRACT_EMBEDDED_IMAGES=true  # PyMuPDF 純文字頁也抽出夠大的內嵌圖
+PDF_EMBEDDED_IMAGE_MIN_AREA=10000 # 內嵌圖最小像素面積（過濾小圖示）
 
 # 日誌配置
 LOG_LEVEL=INFO                    # 日誌級別

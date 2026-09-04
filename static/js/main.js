@@ -114,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentFile = null;
     let downloadUrl = null;
     let pdfPreviewUrl = null;
+    let previewAssetUrls = [];
     let markdownContent = null;
     let promptPreviewExpanded = true;
     let latestUsageLogName = null;
@@ -589,6 +590,10 @@ document.addEventListener('DOMContentLoaded', () => {
             URL.revokeObjectURL(downloadUrl);
             downloadUrl = null;
         }
+        if (previewAssetUrls.length) {
+            previewAssetUrls.forEach((url) => URL.revokeObjectURL(url));
+            previewAssetUrls = [];
+        }
         latestUsageLogName = null;
         if (downloadUsageBtn) {
             downloadUsageBtn.style.display = 'none';
@@ -604,6 +609,10 @@ document.addEventListener('DOMContentLoaded', () => {
     resetBtnPreview.addEventListener('click', resetAll);
 
     function setupDownloadButton(blob, filename, packageKind) {
+        if (downloadUrl) {
+            URL.revokeObjectURL(downloadUrl);
+            downloadUrl = null;
+        }
         downloadUrl = URL.createObjectURL(blob);
         const isZip = packageKind === 'zip' || (blob.type && blob.type.includes('zip'));
         const downloadHandler = () => {
@@ -633,6 +642,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof JSZip === 'undefined') {
             throw new Error('無法解析含圖片的壓縮包（JSZip 未載入）');
         }
+        if (previewAssetUrls.length) {
+            previewAssetUrls.forEach((url) => URL.revokeObjectURL(url));
+            previewAssetUrls = [];
+        }
         const zip = await JSZip.loadAsync(blob);
         const mdEntry = Object.keys(zip.files).find(
             (name) => name.toLowerCase().endsWith('.md') && !zip.files[name].dir
@@ -642,11 +655,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         let text = await zip.file(mdEntry).async('string');
         const assetFiles = Object.keys(zip.files).filter(
-            (name) => /assets\/p\d+\.png$/i.test(name) && !zip.files[name].dir
+            (name) => /assets\/[^/]+\.png$/i.test(name) && !zip.files[name].dir
         );
         for (const assetPath of assetFiles) {
             const assetBlob = await zip.file(assetPath).async('blob');
             const objectUrl = URL.createObjectURL(assetBlob);
+            previewAssetUrls.push(objectUrl);
             const basename = assetPath.split('/').pop();
             const patterns = [
                 new RegExp(`(\\]\\()${assetPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\))`, 'g'),

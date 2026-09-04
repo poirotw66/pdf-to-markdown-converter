@@ -2,9 +2,12 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
+# `*-latest` aliases float; pinned IDs keep billing estimates stable.
 SUPPORTED_GEMINI_MODELS = (
-    "gemini-pro-latest",
     "gemini-flash-latest",
+    "gemini-pro-latest",
+    "gemini-3.8-flash",
+    "gemini-3.1-pro-preview",
 )
 
 
@@ -70,6 +73,11 @@ class Settings(BaseSettings):
     # When assets exist, the API returns a zip (md + assets/) instead of a bare .md.
     pdf_preserve_vision_assets: bool = True
     pdf_vision_asset_dpi: int = 150
+    # On PyMuPDF-only pages, also extract significant embedded images as assets.
+    pdf_extract_embedded_images: bool = True
+    # Minimum width*height (pixels) for an embedded image to be kept.
+    pdf_embedded_image_min_area: int = 10000
+    pdf_embedded_image_max_per_page: int = 8
 
     # Logging Configuration
     log_level: str = "INFO"
