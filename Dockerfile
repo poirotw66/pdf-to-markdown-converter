@@ -9,12 +9,14 @@ RUN apt-get update && apt-get install -y \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# 複製依賴文件
-COPY requirements.txt .
+# 安裝 uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# 安裝 Python 依賴
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# 複製依賴定義（先複製以利用 Docker 層快取）
+COPY pyproject.toml uv.lock ./
+
+# 安裝 Python 依賴（不安裝專案本身）
+RUN uv sync --frozen --no-dev --no-install-project
 
 # 複製應用程式碼
 COPY . .
@@ -25,5 +27,4 @@ EXPOSE 8000
 # 啟動命令
 # Render 會自動設置 PORT 環境變數，main.py 中已經處理了 PORT 環境變數
 # 使用 shell 形式以支持環境變數
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
-
+CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -76,17 +76,29 @@ pdf-to-markdown-converter/
 │   │   └── style.css         # 樣式表
 │   └── js/
 │       └── main.js           # 前端邏輯
-├── requirements.txt          # Python 依賴
+├── pyproject.toml           # 專案與依賴定義（uv）
+├── uv.lock                  # 依賴鎖定檔
 ├── ENV_EXAMPLE.md           # 環境變數範例
 ├── 文件結構化.md            # 文件結構化說明文件
 └── README.md                # 本文件
 ```
 
 ## 安裝
+
+先安裝 [uv](https://docs.astral.sh/uv/getting-started/installation/)，再同步依賴：
+
 ```bash
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+# 若尚未安裝 uv（擇一）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# 或：brew install uv
+
+uv sync
+```
+
+`uv sync` 會自動建立 `.venv` 並安裝 `pyproject.toml` / `uv.lock` 中的依賴。開發與測試可加上：
+
+```bash
+uv sync --group dev
 ```
 
 系統依賴：poppler
@@ -165,9 +177,15 @@ API_PORT=8000                     # API 端口
 ## 啟動
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 # 或
-python -m app.main
+uv run python -m app.main
+```
+
+執行測試：
+
+```bash
+uv run pytest
 ```
 
 ### 訪問地址

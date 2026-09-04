@@ -70,7 +70,7 @@ git push origin main
 
 ### 構建失敗
 1. 檢查 Dockerfile 是否正確
-2. 檢查 requirements.txt 是否完整
+2. 檢查 pyproject.toml / uv.lock 是否完整
 3. 查看 Render 的構建日誌
 
 ### 應用無法啟動

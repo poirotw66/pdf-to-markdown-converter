@@ -1,10 +1,12 @@
 """Tests for Gemini token usage extraction and USD cost estimates."""
+from datetime import date
 from pathlib import Path
 
 from src.utils.token_usage import (
     build_usage_report,
     estimate_cost_usd,
     extract_usage_from_response,
+    resolve_model_rates,
     write_usage_log,
 )
 
@@ -35,15 +37,46 @@ def test_extract_usage_from_response_reads_metadata() -> None:
     assert usage["total_tokens"] == 1250
 
 
-def test_estimate_cost_flash_uses_public_rates() -> None:
-    # 1M input + 1M output at $1.50 / $9.00
-    cost = estimate_cost_usd("gemini-flash-latest", 1_000_000, 1_000_000, 0)
-    assert abs(cost - 10.5) < 1e-9
+def test_estimate_cost_flash_uses_intro_public_rates() -> None:
+    # Through 2026-12-31: 1M input + 1M output at $0.75 / $3.75
+    cost = estimate_cost_usd(
+        "gemini-flash-latest",
+        1_000_000,
+        1_000_000,
+        0,
+        as_of=date(2026, 9, 4),
+    )
+    assert abs(cost - 4.5) < 1e-9
+
+
+def test_estimate_cost_flash_uses_post_intro_public_rates() -> None:
+    # From 2027-01-01: 1M input + 1M output at $1.50 / $7.50
+    cost = estimate_cost_usd(
+        "gemini-flash-latest",
+        1_000_000,
+        1_000_000,
+        0,
+        as_of=date(2027, 1, 1),
+    )
+    assert abs(cost - 9.0) < 1e-9
+
+
+def test_resolve_flash_rates_switch_after_intro_end() -> None:
+    intro = resolve_model_rates("gemini-flash-latest", as_of=date(2026, 12, 31))
+    post = resolve_model_rates("gemini-flash-latest", as_of=date(2027, 1, 1))
+    assert intro == {"input": 0.75, "output": 3.75}
+    assert post == {"input": 1.50, "output": 7.50}
 
 
 def test_estimate_cost_counts_thoughts_as_output() -> None:
-    cost = estimate_cost_usd("gemini-flash-latest", 0, 0, 1_000_000)
-    assert abs(cost - 9.0) < 1e-9
+    cost = estimate_cost_usd(
+        "gemini-flash-latest",
+        0,
+        0,
+        1_000_000,
+        as_of=date(2026, 9, 4),
+    )
+    assert abs(cost - 3.75) < 1e-9
 
 
 def test_estimate_cost_pro_long_context_tier() -> None:

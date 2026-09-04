@@ -4,16 +4,28 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
 
 # Paid-tier public rates (USD per 1M tokens). Estimates only — not invoices.
+# Source: https://ai.google.dev/gemini-api/docs/pricing (synced 2026-09-04).
+# `*-latest` aliases float; rates track the current Flash / Pro GA families:
+#   flash-latest ≈ gemini-3.8-flash (same as 3.6/3.7 Flash standard rates)
+#   pro-latest   ≈ gemini-3.1-pro-preview
+FLASH_LATEST_BASIS_MODEL = "gemini-3.8-flash"
+PRO_LATEST_BASIS_MODEL = "gemini-3.1-pro-preview"
+# Gemini 3.6+ Flash introductory discount ends end of day UTC 2026-12-31.
+FLASH_INTRO_PRICING_END = date(2026, 12, 31)
+
 GEMINI_PRICING_USD_PER_1M: dict[str, dict[str, float]] = {
     "gemini-flash-latest": {
-        "input": 1.50,
-        "output": 9.00,
+        # Active through FLASH_INTRO_PRICING_END; see resolve_model_rates().
+        "input": 0.75,
+        "output": 3.75,
+        "input_after_intro": 1.50,
+        "output_after_intro": 7.50,
     },
     "gemini-pro-latest": {
         "input": 2.00,
@@ -23,6 +35,30 @@ GEMINI_PRICING_USD_PER_1M: dict[str, dict[str, float]] = {
     },
 }
 PRO_LONG_CONTEXT_TOKEN_THRESHOLD = 200_000
+
+
+def resolve_model_rates(
+    model: str,
+    *,
+    as_of: date | None = None,
+) -> dict[str, float] | None:
+    """
+    Return effective input/output USD-per-1M rates for ``model``.
+
+    Flash intro rates apply through ``FLASH_INTRO_PRICING_END`` (inclusive, UTC).
+    """
+    base = GEMINI_PRICING_USD_PER_1M.get(model)
+    if base is None:
+        return None
+    if model != "gemini-flash-latest":
+        return dict(base)
+    day = as_of or datetime.now(timezone.utc).date()
+    if day <= FLASH_INTRO_PRICING_END:
+        return {"input": base["input"], "output": base["output"]}
+    return {
+        "input": base["input_after_intro"],
+        "output": base["output_after_intro"],
+    }
 
 
 @dataclass
@@ -102,14 +138,17 @@ def estimate_cost_usd(
     input_tokens: int,
     output_tokens: int,
     thoughts_tokens: int = 0,
+    *,
+    as_of: date | None = None,
 ) -> float:
     """
     Estimate USD cost for one request (or aggregated totals).
 
     Thoughts/reasoning tokens are billed like output for estimation.
     Pro long-context rates apply when input_tokens > 200K for that unit.
+    Flash rates follow the public intro → post-intro schedule.
     """
-    rates = GEMINI_PRICING_USD_PER_1M.get(model)
+    rates = resolve_model_rates(model, as_of=as_of)
     if rates is None:
         # Unknown model: refuse silent invent — zero estimate.
         return 0.0
@@ -124,6 +163,19 @@ def estimate_cost_usd(
     return (billable_input / 1_000_000.0) * input_rate + (
         billable_output / 1_000_000.0
     ) * output_rate
+
+
+def pricing_note_text() -> str:
+    """Short disclaimer embedded in usage reports."""
+    return (
+        "Estimated USD from public Gemini API paid-tier rates "
+        f"(flash-latest ≈ {FLASH_LATEST_BASIS_MODEL}: "
+        f"$0.75/$3.75 per 1M through {FLASH_INTRO_PRICING_END.isoformat()}, "
+        f"then $1.50/$7.50; "
+        f"pro-latest ≈ {PRO_LATEST_BASIS_MODEL}: $2/$12, "
+        f">200K prompt $4/$18). "
+        "Thoughts tokens counted as output. Not an official invoice."
+    )
 
 
 def _page_usage_from_dict(page: Mapping[str, Any], model: str) -> PageTokenUsage:
@@ -174,10 +226,7 @@ def build_usage_report(
         output_tokens=output_tokens,
         thoughts_tokens=thoughts_tokens,
         estimated_cost_usd=round(estimated, 6),
-        pricing_note=(
-            "Estimated USD from public Gemini API rates; not an official invoice. "
-            "Thoughts tokens counted as output."
-        ),
+        pricing_note=pricing_note_text(),
         pages=pages,
         gemini_api_calls=gemini_calls,
     )
